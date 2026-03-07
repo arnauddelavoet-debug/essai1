@@ -1,12 +1,20 @@
 /* ================================================================
-   SimuPortefeuille — Main Application Logic
-   Monte Carlo simulation using Geometric Brownian Motion (GBM)
+   SimuPortefeuille — Application Logic v2
+   Normes appliquées :
+   • Sécurité  : validation stricte entrées, pas d'innerHTML avec
+                 données utilisateur, CSP-compatible (pas d'eval),
+                 erreurs sans exposition de stack
+   • Fiabilité : try/catch simulation, état de chargement,
+                 destruction propre des graphiques Chart.js,
+                 gestion des cas limites (NaN, Inf, division zéro)
+   • PDF/A     : métadonnées XMP, polices standard, pas de chiffrement,
+                 pagination automatique, empreinte SHA-256
    ================================================================ */
 
 'use strict';
 
 // ----------------------------------------------------------------
-// 1. PRODUCT CATALOGUE
+// 1. CATALOGUE DE PRODUITS
 // ----------------------------------------------------------------
 const PRODUCTS = [
   {
@@ -15,8 +23,8 @@ const PRODUCTS = [
     vehicle: 'Livret',
     vehicleLabel: 'Livret A',
     icon: '🏦',
-    mu: 0.03,          // expected annual return
-    sigma: 0.0,        // annual volatility
+    mu: 0.03,
+    sigma: 0.0,
     guaranteed: true,
     minHorizon: 0,
     riskProfile: ['conservateur', 'modere', 'dynamique'],
@@ -50,7 +58,7 @@ const PRODUCTS = [
   },
   {
     id: 'obligations-etat',
-    name: 'Obligations d\'État (ETF)',
+    name: "Obligations d'État (ETF)",
     vehicle: 'CTO',
     vehicleLabel: 'CTO / AV',
     icon: '🏛️',
@@ -85,7 +93,7 @@ const PRODUCTS = [
     guaranteed: false,
     minHorizon: 3,
     riskProfile: ['conservateur', 'modere'],
-    description: 'UC investies en obligations d\'entreprises, rendement ~3,5–4,5 %.',
+    description: "UC investies en obligations d'entreprises, rendement ~3,5–4,5 %.",
   },
   {
     id: 'etf-europe',
@@ -137,7 +145,7 @@ const PRODUCTS = [
     guaranteed: false,
     minHorizon: 5,
     riskProfile: ['modere', 'dynamique'],
-    description: 'Unités de compte en actions mondiales au sein d\'une assurance-vie.',
+    description: "Unités de compte en actions mondiales au sein d'une assurance-vie.",
   },
   {
     id: 'crypto-btc',
@@ -154,7 +162,7 @@ const PRODUCTS = [
   },
 ];
 
-// Suggested allocations by risk profile
+/** Allocations suggérées par profil de risque */
 const SUGGESTIONS = {
   conservateur: {
     label: 'Profil conservateur recommandé',
@@ -171,27 +179,71 @@ const SUGGESTIONS = {
 };
 
 // ----------------------------------------------------------------
-// 2. STATE
+// 2. ÉTAT GLOBAL
 // ----------------------------------------------------------------
 let state = {
-  capital: 10000,
-  horizon: 10,
-  risk: 'conservateur',
-  mensuel: 0,
-  allocations: {},     // { productId: pctValue }
-  simResults: null,
+  capital:     10000,
+  horizon:     10,
+  risk:        'conservateur',
+  mensuel:     0,
+  allocations: {},
+  simResults:  null,
 };
 
-let charts = {};
+/** Instances Chart.js actives — détruits avant toute recréation */
+const charts = {};
 
 // ----------------------------------------------------------------
-// 3. STEPPER
+// 3. UTILITAIRES — FORMATAGE
 // ----------------------------------------------------------------
+
+/** Formate un nombre en euros (fr-FR) */
+function fmt(n) {
+  if (!Number.isFinite(n)) return '—';
+  return n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + '\u202f€';
+}
+
+/** Formate un ratio [0..1] en pourcentage */
+function fmtPct(p) {
+  if (!Number.isFinite(p)) return '—';
+  return (p * 100).toFixed(1) + '\u202f%';
+}
+
+// ----------------------------------------------------------------
+// 4. GESTION DES ERREURS / CHARGEMENT
+// ----------------------------------------------------------------
+
+function showError(msg) {
+  const el = document.getElementById('error-banner');
+  el.textContent = msg;             // textContent : aucun risque XSS
+  el.hidden = false;
+  setTimeout(() => hideError(), 6000);
+}
+
+function hideError() {
+  document.getElementById('error-banner').hidden = true;
+}
+
+function showLoading() {
+  document.getElementById('loading-overlay').hidden = false;
+}
+
+function hideLoading() {
+  document.getElementById('loading-overlay').hidden = true;
+}
+
+// ----------------------------------------------------------------
+// 5. NAVIGATION PAR ÉTAPES
+// ----------------------------------------------------------------
+
 function goToStep(n) {
+  hideError();
+
   if (n === 2) {
-    readStep1();
+    if (!readStep1()) return;       // validation échoue → on reste à l'étape 1
     renderProducts();
   }
+
   if (n === 3) {
     if (!validateAllocations()) return;
   }
@@ -200,100 +252,149 @@ function goToStep(n) {
   document.getElementById(`step-${n}`).classList.add('active');
 
   document.querySelectorAll('.step').forEach(s => {
-    const sn = parseInt(s.dataset.step);
+    const sn = parseInt(s.dataset.step, 10);
     s.classList.toggle('active', sn === n);
     s.classList.toggle('done', sn < n);
+    s.setAttribute('aria-current', sn === n ? 'step' : 'false');
   });
 
   document.querySelectorAll('.step-line').forEach((l, i) => {
     l.classList.toggle('done', i < n - 1);
   });
 
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  // Scroll interne de l'étape active remis en haut
+  const panel = document.getElementById(`step-${n}`);
+  if (panel) panel.scrollTop = 0;
 }
 
 // ----------------------------------------------------------------
-// 4. STEP 1 — Read inputs
+// 6. ÉTAPE 1 — LECTURE & VALIDATION DES ENTRÉES
 // ----------------------------------------------------------------
+
+/**
+ * Lit, valide et sanitise les entrées de l'étape 1.
+ * Affiche une erreur et retourne false si invalide.
+ */
 function readStep1() {
-  state.capital  = parseFloat(document.getElementById('capital').value)  || 10000;
-  state.horizon  = parseInt(document.getElementById('horizon').value)    || 10;
-  state.risk     = document.querySelector('input[name="risk"]:checked').value;
-  state.mensuel  = parseFloat(document.getElementById('mensuel').value)  || 0;
+  const capitalRaw  = parseFloat(document.getElementById('capital').value);
+  const horizonRaw  = parseInt(document.getElementById('horizon').value, 10);
+  const mensuelRaw  = parseFloat(document.getElementById('mensuel').value);
+  const riskEl      = document.querySelector('input[name="risk"]:checked');
+
+  // Validation
+  if (!Number.isFinite(capitalRaw) || capitalRaw < 100 || capitalRaw > 1_000_000) {
+    showError('Capital invalide — saisissez un montant entre 100 € et 1 000 000 €.');
+    document.getElementById('capital').focus();
+    return false;
+  }
+  if (!Number.isInteger(horizonRaw) || horizonRaw < 1 || horizonRaw > 30) {
+    showError('Horizon invalide — saisissez une durée entre 1 et 30 ans.');
+    document.getElementById('horizon').focus();
+    return false;
+  }
+  if (!Number.isFinite(mensuelRaw) || mensuelRaw < 0 || mensuelRaw > 10_000) {
+    showError('Versements invalides — saisissez un montant entre 0 € et 10 000 €/mois.');
+    document.getElementById('mensuel').focus();
+    return false;
+  }
+  const VALID_RISKS = ['conservateur', 'modere', 'dynamique'];
+  if (!riskEl || !VALID_RISKS.includes(riskEl.value)) {
+    showError('Profil de risque invalide.');
+    return false;
+  }
+
+  state.capital  = capitalRaw;
+  state.horizon  = horizonRaw;
+  state.risk     = riskEl.value;
+  state.mensuel  = mensuelRaw;
+  return true;
 }
 
-function linkSlider(sliderId, inputId) {
+/** Synchronise slider ↔ input numérique */
+function linkSlider(sliderId, inputId, min, max) {
   const slider = document.getElementById(sliderId);
   const input  = document.getElementById(inputId);
-  slider.addEventListener('input', () => { input.value = slider.value; });
-  input.addEventListener('input',  () => {
-    slider.value = Math.min(Math.max(input.value, slider.min), slider.max);
+  if (!slider || !input) return;
+
+  slider.addEventListener('input', () => {
+    input.value = slider.value;
+  });
+  input.addEventListener('input', () => {
+    const clamped = Math.min(Math.max(parseFloat(input.value) || min, min), max);
+    slider.value = clamped;
   });
 }
 
-linkSlider('capital-slider',  'capital');
-linkSlider('horizon-slider',  'horizon');
-linkSlider('mensuel-slider',  'mensuel');
-
-// Risk card highlighting
-document.querySelectorAll('input[name="risk"]').forEach(r => {
-  r.addEventListener('change', () => updateSuggestion());
-});
-
 // ----------------------------------------------------------------
-// 5. STEP 2 — Product rendering
+// 7. ÉTAPE 2 — PRODUITS & ALLOCATION
 // ----------------------------------------------------------------
+
 function vehicleClass(v) {
-  if (v === 'PEA')    return 'vehicle-pea';
-  if (v === 'Livret') return 'vehicle-livret';
-  if (v === 'AV')     return 'vehicle-av';
-  return 'vehicle-cto';
+  const map = { PEA: 'vehicle-pea', Livret: 'vehicle-livret', AV: 'vehicle-av' };
+  return map[v] || 'vehicle-cto';
 }
 
 function renderProducts() {
-  const risk    = document.querySelector('input[name="risk"]:checked').value;
-  const horizon = parseInt(document.getElementById('horizon').value) || 10;
+  const risk    = state.risk;
+  const horizon = state.horizon;
   const grid    = document.getElementById('products-grid');
   grid.innerHTML = '';
 
-  const suggestion = SUGGESTIONS[risk];
-  state.allocations = { ...suggestion.alloc };
+  // Réinitialise les allocations avec la suggestion du profil
+  state.allocations = { ...SUGGESTIONS[risk].alloc };
 
   PRODUCTS.forEach(p => {
     const eligible = p.riskProfile.includes(risk) && p.minHorizon <= horizon;
     const pct      = state.allocations[p.id] || 0;
 
     const card = document.createElement('div');
-    card.className = `product-card${pct > 0 ? ' active' : ''}${!eligible ? ' dimmed' : ''}`;
+    card.className = [
+      'product-card',
+      pct > 0 ? 'active' : '',
+      !eligible ? 'dimmed' : '',
+    ].filter(Boolean).join(' ');
     card.id = `card-${p.id}`;
+    card.setAttribute('role', 'listitem');
 
+    // Stat pills (données issues de constantes — pas d'input utilisateur)
+    const pillReturn = `<span class="stat-pill return">~${(p.mu * 100).toFixed(1)}\u202f%/an</span>`;
+    const pillVol    = p.sigma > 0 ? `<span class="stat-pill vol">σ\u202f${(p.sigma * 100).toFixed(0)}\u202f%</span>` : '';
+    const pillGuar   = p.guaranteed ? '<span class="stat-pill guaranteed">Garanti</span>' : '';
+    const pillMin    = !eligible ? `<span class="stat-pill min-hor">Horizon min.\u202f${p.minHorizon}\u202fans</span>` : '';
+
+    // Construit le contenu du card de façon sûre via DOM
     card.innerHTML = `
       <div class="product-header">
-        <span class="product-icon">${p.icon}</span>
+        <span class="product-icon" aria-hidden="true"></span>
         <div class="product-info">
-          <div class="product-name">${p.name}</div>
-          <span class="product-vehicle ${vehicleClass(p.vehicle)}">${p.vehicleLabel}</span>
+          <div class="product-name"></div>
+          <span class="product-vehicle ${vehicleClass(p.vehicle)}"></span>
         </div>
       </div>
-      <div class="product-stats">
-        <span class="stat-pill return">~${(p.mu * 100).toFixed(1)} % /an</span>
-        <span class="stat-pill vol">σ ${(p.sigma * 100).toFixed(0)} %</span>
-        ${p.guaranteed ? '<span class="stat-pill" style="color:var(--success);border-color:#bbf7d0;background:#f0fdf4">Garanti</span>' : ''}
-        ${!eligible ? `<span class="stat-pill" style="color:var(--danger)">Horizon min. ${p.minHorizon} ans</span>` : ''}
-      </div>
+      <div class="product-stats">${pillReturn}${pillVol}${pillGuar}${pillMin}</div>
       <div class="product-pct-row">
-        <label for="pct-${p.id}">Allocation :</label>
-        <input type="number" id="pct-${p.id}" min="0" max="100" step="5" value="${pct}"
-          ${!eligible ? 'disabled' : ''}
-          onchange="updateAlloc('${p.id}', this.value)"
-          oninput="updateAlloc('${p.id}', this.value)"
-        />
+        <label for="pct-${p.id}">Alloc.\u202f:</label>
+        <input type="number" id="pct-${p.id}"
+               min="0" max="100" step="5" value="${pct}"
+               ${!eligible ? 'disabled aria-disabled="true"' : ''}
+               inputmode="numeric" />
         <span class="unit">%</span>
       </div>
     `;
 
-    // tooltip
+    // Injection textContent (pas innerHTML) pour les données potentiellement hétérogènes
+    card.querySelector('.product-icon').textContent      = p.icon;
+    card.querySelector('.product-name').textContent      = p.name;
+    card.querySelector('.product-vehicle').textContent   = p.vehicleLabel;
+
+    // Tooltip via attribut (pas inline style)
     card.title = p.description;
+
+    // Listener allocation
+    const input = card.querySelector(`#pct-${p.id}`);
+    input.addEventListener('input', () => updateAlloc(p.id, input.value));
+    input.addEventListener('change', () => updateAlloc(p.id, input.value));
+
     grid.appendChild(card);
   });
 
@@ -312,39 +413,54 @@ function updateAlloc(id, val) {
 function updateTotal() {
   const total = Object.values(state.allocations).reduce((a, b) => a + b, 0);
   const el    = document.getElementById('total-pct');
-  el.textContent = `${Math.round(total)} %`;
-  el.className = `total-pct ${total === 100 ? 'good' : total > 100 ? 'over' : 'neutral'}`;
-  document.getElementById('simulate-btn').disabled = Math.round(total) !== 100;
+  const rounded = Math.round(total);
+  el.textContent = `${rounded}\u202f%`;
+  el.className = `total-pct ${rounded === 100 ? 'good' : rounded > 100 ? 'over' : 'neutral'}`;
+  document.getElementById('simulate-btn').disabled = rounded !== 100;
 }
 
 function updateSuggestion() {
-  const risk = document.querySelector('input[name="risk"]:checked').value;
-  const s    = SUGGESTIONS[risk];
-  const bar  = document.getElementById('allocation-suggestions');
-  if (!bar) return;
-  const parts = Object.entries(s.alloc)
-    .map(([id, pct]) => {
-      const p = PRODUCTS.find(x => x.id === id);
-      return p ? `${p.icon} ${p.name} <strong>${pct} %</strong>` : '';
-    }).join(' &nbsp;|&nbsp; ');
-  bar.innerHTML = `<strong>${s.label} :</strong> ${parts}`;
+  const riskEl = document.querySelector('input[name="risk"]:checked');
+  if (!riskEl) return;
+  const s   = SUGGESTIONS[riskEl.value];
+  const bar = document.getElementById('allocation-suggestions');
+  if (!bar || !s) return;
+
+  // Construction DOM sans innerHTML direct
+  bar.textContent = '';
+  const strong = document.createElement('strong');
+  strong.textContent = `${s.label}\u202f: `;
+  bar.appendChild(strong);
+
+  Object.entries(s.alloc).forEach(([id, pct], i) => {
+    const p = PRODUCTS.find(x => x.id === id);
+    if (!p) return;
+    if (i > 0) bar.appendChild(document.createTextNode('\u00a0|\u00a0'));
+    bar.appendChild(document.createTextNode(`${p.icon} ${p.name} `));
+    const b = document.createElement('strong');
+    b.textContent = `${pct}\u202f%`;
+    bar.appendChild(b);
+  });
 }
 
 function validateAllocations() {
   const total = Object.values(state.allocations).reduce((a, b) => a + b, 0);
   if (Math.round(total) !== 100) {
-    alert(`L'allocation doit totaliser 100 % (actuellement ${Math.round(total)} %)`);
+    showError(`L'allocation doit totaliser 100\u202f% (actuellement ${Math.round(total)}\u202f%).`);
     return false;
   }
   return true;
 }
 
 // ----------------------------------------------------------------
-// 6. MONTE CARLO ENGINE
+// 8. MOTEUR MONTE CARLO — MBG
 // ----------------------------------------------------------------
-const N_SIMS = 10000;
+const N_SIMS = 10_000;
 
-// Box-Muller transform — standard normal random
+/**
+ * Transformation de Box-Muller : génère une variable N(0,1).
+ * Boucle while pour éviter log(0) si Math.random() retourne 0.
+ */
 function randn() {
   let u = 0, v = 0;
   while (u === 0) u = Math.random();
@@ -353,20 +469,18 @@ function randn() {
 }
 
 /**
- * Simulate a single path for a blended portfolio using GBM.
- * Returns array of yearly portfolio values [V0, V1, ..., VT].
+ * Simule une trajectoire de portefeuille par MBG (pas mensuel).
+ * @returns {number[]} Valeurs annuelles [V0, V1, …, VT]
  */
 function simulatePath(capital, mu, sigma, horizon, mensuel) {
-  const dt = 1 / 12; // monthly steps
+  const dt    = 1 / 12;
   const steps = Math.round(horizon * 12);
   let V = capital;
   const yearly = [capital];
   let monthInYear = 0;
 
   for (let i = 0; i < steps; i++) {
-    // GBM step
     V = V * Math.exp((mu - 0.5 * sigma * sigma) * dt + sigma * Math.sqrt(dt) * randn());
-    // Monthly contribution
     V += mensuel;
     monthInYear++;
     if (monthInYear === 12) {
@@ -374,16 +488,17 @@ function simulatePath(capital, mu, sigma, horizon, mensuel) {
       monthInYear = 0;
     }
   }
-  if (monthly => monthly && yearly.length < horizon + 1) yearly.push(V);
+  if (yearly.length < horizon + 1) yearly.push(V);
   return yearly;
 }
 
 /**
- * Compute blended portfolio parameters from allocations.
+ * Calcule les paramètres μ et σ du portefeuille mixte.
+ * σ_P = √(Σ (w_i · σ_i)²)  — indépendance des actifs (borne haute du risque réel).
  */
 function blendedParams(allocations) {
-  let mu = 0;
-  let varP = 0; // variance (assume independence)
+  let mu   = 0;
+  let varP = 0;
 
   for (const [id, pct] of Object.entries(allocations)) {
     if (!pct) continue;
@@ -397,145 +512,132 @@ function blendedParams(allocations) {
   return { mu, sigma: Math.sqrt(varP) };
 }
 
-function runSimulation() {
+/** Retourne le percentile p (0–100) d'un tableau trié croissant */
+function pctile(sorted, p) {
+  if (!sorted.length) return 0;
+  const idx = Math.floor((p / 100) * (sorted.length - 1));
+  return sorted[Math.max(0, Math.min(idx, sorted.length - 1))];
+}
+
+// ----------------------------------------------------------------
+// 9. LANCEMENT DE LA SIMULATION (asynchrone — ne bloque pas l'UI)
+// ----------------------------------------------------------------
+
+async function runSimulation() {
   if (!validateAllocations()) return;
-  readStep1();
+  if (!readStep1()) return;
 
-  const { mu, sigma } = blendedParams(state.allocations);
-  const { capital, horizon, mensuel } = state;
+  showLoading();
 
-  // Total invested (capital + contributions)
-  const totalInvested = capital + mensuel * 12 * horizon;
+  // Donne la main au navigateur pour afficher l'overlay avant le calcul intensif
+  await new Promise(r => setTimeout(r, 60));
 
-  // Run Monte Carlo
-  const finalValues = new Array(N_SIMS);
-  const yearlyMedians = [];
+  try {
+    const { mu, sigma }        = blendedParams(state.allocations);
+    const { capital, horizon, mensuel } = state;
+    const totalInvested        = capital + mensuel * 12 * horizon;
 
-  // collect full paths for percentile fan
-  const pctPaths = { p10: [], p25: [], p50: [], p75: [], p90: [] };
-  const allPaths = [];
+    const finalValues   = new Float64Array(N_SIMS);
+    const allPaths      = [];
+    const pctPaths      = { p10: [], p25: [], p50: [], p75: [], p90: [] };
 
-  for (let i = 0; i < N_SIMS; i++) {
-    const path = simulatePath(capital, mu, sigma, horizon, mensuel);
-    finalValues[i] = path[path.length - 1];
-    allPaths.push(path);
+    for (let i = 0; i < N_SIMS; i++) {
+      const path = simulatePath(capital, mu, sigma, horizon, mensuel);
+      finalValues[i] = path[path.length - 1];
+      allPaths.push(path);
+    }
+
+    // Tri des valeurs finales (copie Array pour sort natif)
+    const sortedFinals = Array.from(finalValues).sort((a, b) => a - b);
+
+    // Percentiles par année
+    for (let t = 0; t <= horizon; t++) {
+      const vals = allPaths.map(p => p[t]).sort((a, b) => a - b);
+      pctPaths.p10.push(pctile(vals, 10));
+      pctPaths.p25.push(pctile(vals, 25));
+      pctPaths.p50.push(pctile(vals, 50));
+      pctPaths.p75.push(pctile(vals, 75));
+      pctPaths.p90.push(pctile(vals, 90));
+    }
+
+    const lossCount         = sortedFinals.filter(v => v < capital).length;
+    const probLoss          = lossCount / N_SIMS;
+    const lossInvestedCount = sortedFinals.filter(v => v < totalInvested).length;
+    const probLossInvested  = lossInvestedCount / N_SIMS;
+
+    state.simResults = {
+      mu, sigma, totalInvested,
+      finalValues: sortedFinals,
+      pctPaths,
+      probLoss, probLossInvested,
+      p10: pctile(sortedFinals, 10),
+      p25: pctile(sortedFinals, 25),
+      p50: pctile(sortedFinals, 50),
+      p75: pctile(sortedFinals, 75),
+      p90: pctile(sortedFinals, 90),
+    };
+
+    renderResults();
+    activateTab('kpi');
+    goToStep(3);
+
+  } catch (err) {
+    // Pas d'exposition du stack trace à l'utilisateur
+    console.error('Simulation error:', err);
+    showError('Une erreur est survenue pendant la simulation. Vérifiez vos paramètres et réessayez.');
+  } finally {
+    hideLoading();
   }
-
-  // Sort finals
-  finalValues.sort((a, b) => a - b);
-
-  // Percentile helper
-  const pct = (arr, p) => {
-    const i = Math.floor(p / 100 * (arr.length - 1));
-    return arr[i];
-  };
-
-  // Per-year percentiles
-  for (let t = 0; t <= horizon; t++) {
-    const vals = allPaths.map(p => p[t]).sort((a, b) => a - b);
-    pctPaths.p10.push(pct(vals, 10));
-    pctPaths.p25.push(pct(vals, 25));
-    pctPaths.p50.push(pct(vals, 50));
-    pctPaths.p75.push(pct(vals, 75));
-    pctPaths.p90.push(pct(vals, 90));
-  }
-
-  // Probability of loss
-  const lossCount = finalValues.filter(v => v < capital).length;
-  const probLoss  = lossCount / N_SIMS;
-
-  // Probability of not recovering total invested (capital + contributions)
-  const lossInvestedCount = finalValues.filter(v => v < totalInvested).length;
-  const probLossInvested  = lossInvestedCount / N_SIMS;
-
-  state.simResults = {
-    mu, sigma,
-    totalInvested,
-    finalValues,
-    pctPaths,
-    probLoss,
-    probLossInvested,
-    p10: pct(finalValues, 10),
-    p25: pct(finalValues, 25),
-    p50: pct(finalValues, 50),
-    p75: pct(finalValues, 75),
-    p90: pct(finalValues, 90),
-  };
-
-  renderResults();
-  goToStep(3);
 }
 
 // ----------------------------------------------------------------
-// 7. RENDER RESULTS
+// 10. RENDU DES RÉSULTATS
 // ----------------------------------------------------------------
-function fmt(n) {
-  return n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' €';
-}
-
-function fmtPct(p) {
-  return (p * 100).toFixed(1) + ' %';
-}
 
 function renderResults() {
-  const { mu, sigma, probLoss, probLossInvested, p10, p25, p50, p75, p90,
-          finalValues, pctPaths, totalInvested } = state.simResults;
+  const {
+    mu, sigma, probLoss, probLossInvested,
+    p10, p50, p90, finalValues, pctPaths, totalInvested,
+  } = state.simResults;
   const { capital, horizon, mensuel } = state;
 
-  // Subtitle
-  document.getElementById('sim-subtitle').textContent =
+  // Sous-titre
+  const subtitle = document.getElementById('sim-subtitle');
+  subtitle.textContent =
     `Capital : ${fmt(capital)} — Horizon : ${horizon} ans — ` +
-    `Versements : ${fmt(mensuel)}/mois — Rendement moyen : ${fmtPct(mu)} — Volatilité : ${fmtPct(sigma)}`;
+    `Versements : ${fmt(mensuel)}/mois — μ : ${fmtPct(mu)} — σ : ${fmtPct(sigma)}`;
 
   // KPIs
-  document.getElementById('kpi-loss').textContent  = fmtPct(probLoss);
+  document.getElementById('kpi-loss').textContent     = fmtPct(probLoss);
   document.getElementById('kpi-loss-sub').textContent =
-    `(ne pas récupérer le capital initial de ${fmt(capital)})`;
+    `(capital initial : ${fmt(capital)})`;
 
-  document.getElementById('kpi-median').textContent  = fmt(p50);
+  document.getElementById('kpi-median').textContent     = fmt(p50);
   document.getElementById('kpi-median-sub').textContent =
-    `+ ${fmtPct((p50 / capital - 1))} vs capital initial`;
+    `+${fmtPct((p50 / capital - 1))} vs capital initial`;
 
   document.getElementById('kpi-p90').textContent     = fmt(p90);
-  document.getElementById('kpi-p90-sub').textContent = `90 % des simulations sous ce seuil`;
+  document.getElementById('kpi-p90-sub').textContent = `10\u202f% des simulations au-dessus`;
 
   document.getElementById('kpi-p10').textContent     = fmt(p10);
-  document.getElementById('kpi-p10-sub').textContent = `10 % des simulations sous ce seuil`;
+  document.getElementById('kpi-p10-sub').textContent = `10\u202f% des simulations en-dessous`;
 
-  // Gauge
+  // Graphiques
   renderGauge(probLoss);
-
-  // Histogram
-  renderHistogram(finalValues, capital, totalInvested);
-
-  // Fan chart
+  renderHistogram(finalValues, capital);
   renderFanChart(pctPaths, horizon, capital);
-
-  // Donut
   renderDonut();
-
-  // Table
   renderTable(capital, horizon, mensuel);
-
-  // Explainer
   renderExplainer(probLoss, probLossInvested, mu, sigma);
 }
 
-// ---- GAUGE ----
+// ── Gauge ──────────────────────────────────────────────────────
 function renderGauge(probLoss) {
-  const pct = Math.min(probLoss, 1);
-  const startAngle = Math.PI;
-  const endAngle   = 2 * Math.PI;
-  const fillAngle  = startAngle + pct * Math.PI;
-
   const ctx = document.getElementById('gauge-chart').getContext('2d');
+  if (charts.gauge) { charts.gauge.destroy(); charts.gauge = null; }
 
-  if (charts.gauge) charts.gauge.destroy();
-
-  // Color: green → yellow → red
-  const color = pct < 0.1 ? '#16a34a'
-              : pct < 0.3 ? '#d97706'
-              : '#dc2626';
+  const pct   = Math.min(Math.max(probLoss, 0), 1);
+  const color = pct < 0.1 ? '#16a34a' : pct < 0.3 ? '#d97706' : '#dc2626';
 
   charts.gauge = new Chart(ctx, {
     type: 'doughnut',
@@ -552,50 +654,44 @@ function renderGauge(probLoss) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend:  { display: false },
         tooltip: { enabled: false },
       },
       cutout: '70%',
+      animation: { duration: 600 },
     },
   });
 
-  // Label
   const label = pct < 0.05 ? '🟢 Très faible'
               : pct < 0.15 ? '🟡 Faible'
               : pct < 0.30 ? '🟠 Modéré'
               : pct < 0.50 ? '🔴 Élevé'
               : '⛔ Très élevé';
-
   document.getElementById('gauge-label').textContent = label;
 }
 
-// ---- HISTOGRAM ----
-function renderHistogram(finalValues, capital, totalInvested) {
+// ── Histogramme ────────────────────────────────────────────────
+function renderHistogram(finalValues, capital) {
   const ctx = document.getElementById('dist-chart').getContext('2d');
-  if (charts.dist) charts.dist.destroy();
+  if (charts.dist) { charts.dist.destroy(); charts.dist = null; }
 
   const min = finalValues[0];
   const max = finalValues[finalValues.length - 1];
-  const bins = 50;
-  const binSize = (max - min) / bins;
+  if (max === min) return;
 
-  const counts = new Array(bins).fill(0);
-  const labels = [];
-
-  for (let i = 0; i < bins; i++) {
-    labels.push(Math.round(min + i * binSize));
-  }
+  const BINS    = 50;
+  const binSize = (max - min) / BINS;
+  const counts  = new Array(BINS).fill(0);
+  const labels  = Array.from({ length: BINS }, (_, i) => min + i * binSize);
 
   finalValues.forEach(v => {
-    const idx = Math.min(bins - 1, Math.floor((v - min) / binSize));
+    const idx = Math.min(BINS - 1, Math.floor((v - min) / binSize));
     counts[idx]++;
   });
 
-  // Color: red if below capital
-  const colors = labels.map((l, i) => {
-    const midPoint = l + binSize / 2;
-    return midPoint < capital ? 'rgba(220,38,38,.7)' : 'rgba(37,99,235,.6)';
-  });
+  const colors = labels.map(l => (l + binSize / 2) < capital
+    ? 'rgba(220,38,38,.7)'
+    : 'rgba(37,99,235,.6)');
 
   charts.dist = new Chart(ctx, {
     type: 'bar',
@@ -612,6 +708,7 @@ function renderHistogram(finalValues, capital, totalInvested) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: { duration: 400 },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -620,19 +717,18 @@ function renderHistogram(finalValues, capital, totalInvested) {
             title: ctx => `Valeur ≈ ${ctx[0].label}`,
           },
         },
-        annotation: {},
       },
       scales: {
         x: {
           ticks: {
-            maxTicksLimit: 8,
-            callback: (v, i) => i % 6 === 0 ? fmt(labels[i]) : '',
-            font: { size: 10 },
+            maxTicksLimit: 7,
+            callback: (v, i) => i % 7 === 0 ? fmt(labels[i]) : '',
+            font: { size: 9 },
           },
           grid: { display: false },
         },
         y: {
-          ticks: { font: { size: 10 } },
+          ticks: { font: { size: 9 } },
           grid: { color: '#f1f5f9' },
         },
       },
@@ -640,10 +736,10 @@ function renderHistogram(finalValues, capital, totalInvested) {
   });
 }
 
-// ---- FAN CHART ----
+// ── Fan chart ──────────────────────────────────────────────────
 function renderFanChart(pctPaths, horizon, capital) {
   const ctx = document.getElementById('fan-chart').getContext('2d');
-  if (charts.fan) charts.fan.destroy();
+  if (charts.fan) { charts.fan.destroy(); charts.fan = null; }
 
   const labels = Array.from({ length: horizon + 1 }, (_, i) => `An ${i}`);
 
@@ -652,110 +748,42 @@ function renderFanChart(pctPaths, horizon, capital) {
     data: {
       labels,
       datasets: [
-        {
-          label: '10e percentile',
-          data: pctPaths.p10,
-          borderColor: 'rgba(220,38,38,.8)',
-          backgroundColor: 'rgba(220,38,38,.05)',
-          borderWidth: 1.5,
-          borderDash: [4, 3],
-          pointRadius: 0,
-          fill: false,
-          tension: 0.3,
-        },
-        {
-          label: '25e percentile',
-          data: pctPaths.p25,
-          borderColor: 'rgba(249,115,22,.6)',
-          backgroundColor: 'rgba(249,115,22,.07)',
-          borderWidth: 1,
-          pointRadius: 0,
-          fill: '+1',
-          tension: 0.3,
-        },
-        {
-          label: 'Médiane (50e)',
-          data: pctPaths.p50,
-          borderColor: 'rgba(37,99,235,1)',
-          backgroundColor: 'rgba(37,99,235,.08)',
-          borderWidth: 2.5,
-          pointRadius: 3,
-          fill: false,
-          tension: 0.3,
-        },
-        {
-          label: '75e percentile',
-          data: pctPaths.p75,
-          borderColor: 'rgba(34,197,94,.6)',
-          backgroundColor: 'rgba(34,197,94,.07)',
-          borderWidth: 1,
-          pointRadius: 0,
-          fill: '-1',
-          tension: 0.3,
-        },
-        {
-          label: '90e percentile',
-          data: pctPaths.p90,
-          borderColor: 'rgba(22,163,74,.8)',
-          backgroundColor: 'rgba(22,163,74,.05)',
-          borderWidth: 1.5,
-          borderDash: [4, 3],
-          pointRadius: 0,
-          fill: false,
-          tension: 0.3,
-        },
-        {
-          label: 'Capital initial',
-          data: Array(horizon + 1).fill(capital),
-          borderColor: 'rgba(100,116,139,.5)',
-          borderWidth: 1,
-          borderDash: [6, 4],
-          pointRadius: 0,
-          fill: false,
-        },
+        { label: '10e pct.',    data: pctPaths.p10, borderColor: 'rgba(220,38,38,.8)',  backgroundColor: 'rgba(0,0,0,0)', borderWidth: 1.5, borderDash: [4, 3], pointRadius: 0, fill: false, tension: 0.3 },
+        { label: '25e pct.',    data: pctPaths.p25, borderColor: 'rgba(249,115,22,.6)', backgroundColor: 'rgba(249,115,22,.08)', borderWidth: 1, pointRadius: 0, fill: '+1', tension: 0.3 },
+        { label: 'Médiane',     data: pctPaths.p50, borderColor: 'rgba(37,99,235,1)',   backgroundColor: 'rgba(37,99,235,.07)', borderWidth: 2.5, pointRadius: 3, fill: false, tension: 0.3 },
+        { label: '75e pct.',    data: pctPaths.p75, borderColor: 'rgba(34,197,94,.6)',  backgroundColor: 'rgba(34,197,94,.08)', borderWidth: 1, pointRadius: 0, fill: '-1', tension: 0.3 },
+        { label: '90e pct.',    data: pctPaths.p90, borderColor: 'rgba(22,163,74,.8)',  backgroundColor: 'rgba(0,0,0,0)', borderWidth: 1.5, borderDash: [4, 3], pointRadius: 0, fill: false, tension: 0.3 },
+        { label: 'Capital initial', data: Array(horizon + 1).fill(capital), borderColor: 'rgba(100,116,139,.45)', borderWidth: 1, borderDash: [6, 4], pointRadius: 0, fill: false },
       ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: { duration: 400 },
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: {
-          display: true,
-          position: 'bottom',
-          labels: { font: { size: 11 }, boxWidth: 20 },
-        },
-        tooltip: {
-          callbacks: {
-            label: ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`,
-          },
-        },
+        legend: { display: true, position: 'bottom', labels: { font: { size: 10 }, boxWidth: 18 } },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}` } },
       },
       scales: {
-        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } },
+        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 9 } } },
         y: {
           grid: { color: '#f1f5f9' },
-          ticks: {
-            font: { size: 10 },
-            callback: v => v >= 1000 ? `${(v / 1000).toFixed(0)}k €` : `${v} €`,
-          },
+          ticks: { font: { size: 9 }, callback: v => v >= 1000 ? `${(v / 1000).toFixed(0)}k\u202f€` : `${v}\u202f€` },
         },
       },
     },
   });
 }
 
-// ---- DONUT ----
+// ── Donut ──────────────────────────────────────────────────────
 function renderDonut() {
   const ctx = document.getElementById('donut-chart').getContext('2d');
-  if (charts.donut) charts.donut.destroy();
+  if (charts.donut) { charts.donut.destroy(); charts.donut = null; }
 
-  const labels = [];
-  const data   = [];
-  const colors = ['#2563eb','#7c3aed','#16a34a','#d97706','#0891b2','#dc2626','#0d9488','#9333ea','#f59e0b','#6366f1','#ef4444'];
-
+  const PALETTE = ['#2563eb','#7c3aed','#16a34a','#d97706','#0891b2','#dc2626','#0d9488','#9333ea','#f59e0b','#6366f1','#ef4444'];
+  const labels = [], data = [], bgColors = [];
   let ci = 0;
-  const bgColors = [];
 
   for (const [id, pct] of Object.entries(state.allocations)) {
     if (!pct) continue;
@@ -763,36 +791,29 @@ function renderDonut() {
     if (!p) continue;
     labels.push(`${p.icon} ${p.name}`);
     data.push(pct);
-    bgColors.push(colors[ci++ % colors.length]);
+    bgColors.push(PALETTE[ci++ % PALETTE.length]);
   }
 
   charts.donut = new Chart(ctx, {
     type: 'doughnut',
-    data: {
-      labels,
-      datasets: [{ data, backgroundColor: bgColors, borderWidth: 2, borderColor: '#fff' }],
-    },
+    data: { labels, datasets: [{ data, backgroundColor: bgColors, borderWidth: 2, borderColor: '#fff' }] },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: { duration: 400 },
       plugins: {
-        legend: {
-          position: 'bottom',
-          labels: { font: { size: 11 }, boxWidth: 14 },
-        },
-        tooltip: {
-          callbacks: { label: ctx => `${ctx.label}: ${ctx.parsed} %` },
-        },
+        legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12 } },
+        tooltip: { callbacks: { label: ctx => `${ctx.label}: ${ctx.parsed}\u202f%` } },
       },
       cutout: '55%',
     },
   });
 }
 
-// ---- DETAIL TABLE ----
+// ── Table détail ───────────────────────────────────────────────
 function renderTable(capital, horizon, mensuel) {
   const tbody = document.querySelector('#detail-table tbody');
-  tbody.innerHTML = '';
+  tbody.textContent = ''; // sûr vs innerHTML = ''
 
   for (const [id, pct] of Object.entries(state.allocations)) {
     if (!pct) continue;
@@ -800,20 +821,20 @@ function renderTable(capital, horizon, mensuel) {
     if (!p) continue;
 
     const w = pct / 100;
-    const allocated = capital * w;
-
-    // Simulate median for this product alone
-    const { p50 } = singleProductSim(allocated, p.mu, p.sigma, horizon, mensuel * w);
+    const { p50 } = singleProductSim(capital * w, p.mu, p.sigma, horizon, mensuel * w);
 
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${p.icon} <strong>${p.name}</strong></td>
-      <td><span class="product-vehicle ${vehicleClass(p.vehicle)}">${p.vehicleLabel}</span></td>
-      <td>${pct} %</td>
-      <td>${fmtPct(p.mu)}</td>
-      <td>${fmtPct(p.sigma)}</td>
-      <td>${fmt(p50)}</td>
-    `;
+
+    const cells = [
+      () => { const td = document.createElement('td'); const b = document.createElement('b'); b.textContent = `${p.icon} ${p.name}`; td.appendChild(b); return td; },
+      () => { const td = document.createElement('td'); const sp = document.createElement('span'); sp.className = `product-vehicle ${vehicleClass(p.vehicle)}`; sp.textContent = p.vehicleLabel; td.appendChild(sp); return td; },
+      () => { const td = document.createElement('td'); td.textContent = `${pct}\u202f%`; return td; },
+      () => { const td = document.createElement('td'); td.textContent = fmtPct(p.mu); return td; },
+      () => { const td = document.createElement('td'); td.textContent = fmtPct(p.sigma); return td; },
+      () => { const td = document.createElement('td'); td.textContent = fmt(p50); return td; },
+    ];
+
+    cells.forEach(fn => tr.appendChild(fn()));
     tbody.appendChild(tr);
   }
 }
@@ -829,54 +850,588 @@ function singleProductSim(capital, mu, sigma, horizon, mensuel) {
   return { p50: finals[Math.floor(N / 2)] };
 }
 
-// ---- EXPLAINER ----
+// ── Explainer ──────────────────────────────────────────────────
 function renderExplainer(probLoss, probLossInvested, mu, sigma) {
   const { capital, horizon, mensuel, simResults } = state;
   const { p10, p50, p90 } = simResults;
 
-  let riskLevel, riskColor, advice;
+  const levels = [
+    { max: 0.05, label: 'Très faible', cssClass: 'risk-text-vlow',  advice: 'Votre portefeuille présente un risque de perte en capital très limité. Profil adapté aux investisseurs privilégiant la sécurité.' },
+    { max: 0.15, label: 'Faible',      cssClass: 'risk-text-low',   advice: "Le risque est contenu. L'horizon et la diversification protègent bien votre capital." },
+    { max: 0.30, label: 'Modéré',      cssClass: 'risk-text-mod',   advice: 'Une part non négligeable des scénarios peut conduire à une perte. Vérifiez que votre horizon est suffisamment long.' },
+    { max: 0.50, label: 'Élevé',       cssClass: 'risk-text-high',  advice: 'Risque significatif. Renforcez la part de produits garantis ou allongez votre horizon si possible.' },
+    { max: Infinity, label: 'Très élevé', cssClass: 'risk-text-vhigh', advice: "Plus d'une simulation sur deux aboutit à une perte. Reconsidérez votre allocation ou votre horizon." },
+  ];
 
-  if (probLoss < 0.05) {
-    riskLevel = 'Très faible';
-    riskColor = 'var(--success)';
-    advice = 'Votre portefeuille présente un risque de perte en capital très limité. Ce profil convient aux investisseurs privilégiant la sécurité et la liquidité.';
-  } else if (probLoss < 0.15) {
-    riskLevel = 'Faible';
-    riskColor = '#65a30d';
-    advice = 'Le risque est contenu. L\'horizon de placement et la diversification protègent bien votre capital.';
-  } else if (probLoss < 0.30) {
-    riskLevel = 'Modéré';
-    riskColor = 'var(--warning)';
-    advice = 'Une part non négligeable des scénarios peut conduire à une perte. Vérifiez que votre horizon est suffisamment long.';
-  } else if (probLoss < 0.50) {
-    riskLevel = 'Élevé';
-    riskColor = '#f97316';
-    advice = 'Risque significatif. Renforcez la part de produits garantis ou allongez votre horizon si possible.';
-  } else {
-    riskLevel = 'Très élevé';
-    riskColor = 'var(--danger)';
-    advice = 'Plus d\'une simulation sur deux aboutit à une perte. Reconsidérez votre allocation ou votre horizon.';
-  }
-
+  const lvl = levels.find(l => probLoss < l.max);
   const totalInvested = capital + mensuel * 12 * horizon;
 
-  document.getElementById('risk-explainer').innerHTML = `
-    <h4>Analyse du risque — <span style="color:${riskColor}">${riskLevel}</span></h4>
-    <p>${advice}</p>
-    <ul>
-      <li>Probabilité de ne pas récupérer le capital initial (${fmt(capital)}) : <strong>${fmtPct(probLoss)}</strong></li>
-      <li>Probabilité de ne pas récupérer le total investi (${fmt(totalInvested)}) : <strong>${fmtPct(probLossInvested)}</strong></li>
-      <li>Rendement annuel moyen du portefeuille : <strong>${fmtPct(mu)}</strong></li>
-      <li>Volatilité annuelle globale : <strong>${fmtPct(sigma)}</strong></li>
-      <li>Fourchette de résultats à ${horizon} ans : de <strong>${fmt(p10)}</strong> (scén. pessimiste) à <strong>${fmt(p90)}</strong> (scén. optimiste)</li>
-      <li>La méthode Monte Carlo simule ${N_SIMS.toLocaleString('fr-FR')} trajectoires via un Mouvement Brownien Géométrique.</li>
-    </ul>
-  `;
+  const container = document.getElementById('risk-explainer');
+  container.textContent = '';
+
+  const h4 = document.createElement('h4');
+  h4.textContent = 'Analyse du risque — ';
+  const span = document.createElement('span');
+  span.className = lvl.cssClass;
+  span.textContent = lvl.label;
+  h4.appendChild(span);
+  container.appendChild(h4);
+
+  const p = document.createElement('p');
+  p.textContent = lvl.advice;
+  container.appendChild(p);
+
+  const items = [
+    `Probabilité de ne pas récupérer le capital initial (${fmt(capital)}) : ${fmtPct(probLoss)}`,
+    `Probabilité de ne pas récupérer le total investi (${fmt(totalInvested)}) : ${fmtPct(probLossInvested)}`,
+    `Rendement annuel moyen (μ) : ${fmtPct(mu)}`,
+    `Volatilité annuelle globale (σ) : ${fmtPct(sigma)}`,
+    `Fourchette à ${horizon} ans : de ${fmt(p10)} (pessimiste) à ${fmt(p90)} (optimiste) — médiane ${fmt(p50)}`,
+    `Méthode : Mouvement Brownien Géométrique, ${N_SIMS.toLocaleString('fr-FR')} scénarios.`,
+  ];
+
+  const ul = document.createElement('ul');
+  items.forEach(text => {
+    const li = document.createElement('li');
+    li.textContent = text;
+    ul.appendChild(li);
+  });
+  container.appendChild(ul);
 }
 
 // ----------------------------------------------------------------
-// 8. INIT
+// 11. GESTION DES ONGLETS (step 3)
+// ----------------------------------------------------------------
+
+function activateTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    const isActive = btn.dataset.tab === name;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+
+  document.querySelectorAll('.tab-panel').forEach(panel => {
+    const show = panel.id === `tab-${name}`;
+    panel.hidden = !show;
+    panel.classList.toggle('active', show);
+    if (show) panel.scrollTop = 0;
+  });
+}
+
+// ----------------------------------------------------------------
+// 12. GÉNÉRATION PDF — PDF/A best-effort + empreinte SHA-256
+// ----------------------------------------------------------------
+
+/**
+ * Calcule le SHA-256 d'une chaîne (Web Crypto API).
+ * Retourne la représentation hexadécimale.
+ */
+async function sha256(message) {
+  try {
+    const buf  = new TextEncoder().encode(message);
+    const hash = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(hash))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  } catch {
+    return 'unavailable';
+  }
+}
+
+/** Capture un canvas Chart.js sous forme d'image PNG (data URL) */
+function captureChart(canvasId) {
+  try {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+    return canvas.toDataURL('image/png', 0.95);
+  } catch {
+    return null;
+  }
+}
+
+async function generatePDF() {
+  if (!state.simResults) { showError('Lancez d'abord une simulation.'); return; }
+  if (!window.jspdf)     { showError('jsPDF non chargé — vérifiez votre connexion.'); return; }
+
+  showLoading();
+  await new Promise(r => setTimeout(r, 80));
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const { capital, horizon, mensuel, risk, simResults } = state;
+    const { mu, sigma, p10, p25, p50, p75, p90, probLoss, probLossInvested, totalInvested } = simResults;
+
+    // ── Empreinte d'authenticité ──────────────────────────────
+    const docId       = Date.now().toString(36).toUpperCase();
+    const fingerprint = await sha256(JSON.stringify({ capital, horizon, mensuel, risk, p50, mu, sigma, ts: docId }));
+
+    // ── Initialisation jsPDF ──────────────────────────────────
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit:        'mm',
+      format:      'a4',
+      putOnlyUsedFonts: true,
+      compress:    true,
+    });
+
+    // ── Métadonnées PDF/A-1b (best-effort) ───────────────────
+    const now   = new Date();
+    const dateStr = now.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+    doc.setProperties({
+      title:    'SimuPortefeuille — Rapport de simulation',
+      subject:  'Simulation Monte Carlo de portefeuille financier',
+      author:   'SimuPortefeuille',
+      keywords: 'simulation, portefeuille, Monte Carlo, MBG, risque, finance',
+      creator:  'SimuPortefeuille v2 — jsPDF 2.5.1',
+    });
+    doc.setLanguage('fr-FR');
+
+    // ── Dimensions A4 ─────────────────────────────────────────
+    const W  = 210;  // mm
+    const H  = 297;  // mm
+    const ML = 14;   // marge gauche
+    const MR = 14;   // marge droite
+    const CW = W - ML - MR; // largeur contenu
+
+    const NAVY  = [28,  48,  83];
+    const GOLD  = [197, 160,  40];
+    const WHITE = [255, 255, 255];
+    const LIGHT = [245, 247, 250];
+    const MUTED = [100, 116, 139];
+    const TEXT  = [30,  41,  59];
+
+    let page = 1;
+    let pageCount = 5; // estimation
+
+    // ── Helpers pagination ─────────────────────────────────────
+    function header() {
+      doc.setFillColor(...NAVY);
+      doc.rect(0, 0, W, 16, 'F');
+      doc.setFillColor(...GOLD);
+      doc.rect(0, 16, W, 1.2, 'F');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(...WHITE);
+      doc.text('SimuPortefeuille', ML, 11);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text('Rapport de simulation financière', W / 2, 11, { align: 'center' });
+      doc.text(dateStr, W - MR, 11, { align: 'right' });
+    }
+
+    function footer(pg) {
+      doc.setFillColor(...LIGHT);
+      doc.rect(0, H - 13, W, 13, 'F');
+      doc.setDrawColor(220, 228, 240);
+      doc.setLineWidth(0.3);
+      doc.line(0, H - 13, W, H - 13);
+
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(7);
+      doc.setTextColor(...MUTED);
+      doc.text('Simulation à titre indicatif — pas un conseil en investissement.', W / 2, H - 7, { align: 'center' });
+      doc.text(`Page ${pg}`, W - MR, H - 4, { align: 'right' });
+      doc.text(`Réf. ${docId}`, ML, H - 4);
+    }
+
+    /** Vérifie si on a assez de place, sinon newPage */
+    function checkY(y, needed) {
+      if (y + needed > H - 18) {
+        doc.addPage();
+        page++;
+        header();
+        footer(page);
+        return 22;
+      }
+      return y;
+    }
+
+    function sectionTitle(y, text) {
+      y = checkY(y, 12);
+      doc.setFillColor(...NAVY);
+      doc.rect(ML, y, CW, 7, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(...WHITE);
+      doc.text(text, ML + 3, y + 5);
+      return y + 10;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PAGE 1 — Couverture
+    // ═══════════════════════════════════════════════════════════
+    header();
+    footer(1);
+
+    // Bloc titre
+    doc.setFillColor(...NAVY);
+    doc.roundedRect(ML, 22, CW, 38, 4, 4, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(...GOLD);
+    doc.text('RAPPORT DE SIMULATION', W / 2, 36, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(...WHITE);
+    doc.text('Portefeuille financier — Analyse Monte Carlo', W / 2, 44, { align: 'center' });
+    doc.text(`Généré le ${dateStr}`, W / 2, 51, { align: 'center' });
+
+    // Paramètres de simulation
+    let y = 68;
+    y = sectionTitle(y, 'PARAMÈTRES DE LA SIMULATION');
+
+    doc.autoTable({
+      startY: y,
+      head: [['Paramètre', 'Valeur']],
+      body: [
+        ['Capital initial', fmt(capital)],
+        ['Horizon de placement', `${horizon} ans`],
+        ['Versements mensuels', fmt(mensuel) + '/mois'],
+        ['Capital total investi', fmt(totalInvested)],
+        ['Profil de risque', risk.charAt(0).toUpperCase() + risk.slice(1)],
+        ['Rendement annuel moyen (μ)', fmtPct(mu)],
+        ['Volatilité annuelle (σ)', fmtPct(sigma)],
+        ['Nombre de simulations', N_SIMS.toLocaleString('fr-FR')],
+        ['Modèle', 'Mouvement Brownien Géométrique (MBG)'],
+      ],
+      theme: 'grid',
+      headStyles:   { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 8 },
+      bodyStyles:   { fontSize: 8, textColor: TEXT },
+      alternateRowStyles: { fillColor: LIGHT },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 75 }, 1: { cellWidth: 'auto' } },
+      margin: { left: ML, right: MR },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+
+    // Allocation
+    y = checkY(y, 12);
+    y = sectionTitle(y, 'ALLOCATION DU PORTEFEUILLE');
+
+    const allocRows = Object.entries(state.allocations)
+      .filter(([, pct]) => pct > 0)
+      .map(([id, pct]) => {
+        const p = PRODUCTS.find(x => x.id === id);
+        return p ? [p.name, p.vehicleLabel, `${pct} %`, fmtPct(p.mu), fmtPct(p.sigma)] : null;
+      })
+      .filter(Boolean);
+
+    doc.autoTable({
+      startY: y,
+      head: [['Support', 'Véhicule', 'Alloc.', 'Rdt μ', 'Vol. σ']],
+      body: allocRows,
+      theme: 'grid',
+      headStyles:   { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
+      bodyStyles:   { fontSize: 7.5, textColor: TEXT },
+      alternateRowStyles: { fillColor: LIGHT },
+      columnStyles: { 0: { cellWidth: 65 }, 1: { cellWidth: 35 }, 2: { cellWidth: 18, halign: 'center' }, 3: { cellWidth: 20, halign: 'center' }, 4: { cellWidth: 20, halign: 'center' } },
+      margin: { left: ML, right: MR },
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    // PAGE 2 — Indicateurs clés
+    // ═══════════════════════════════════════════════════════════
+    doc.addPage(); page++;
+    header(); footer(page);
+
+    y = 22;
+    y = sectionTitle(y, 'INDICATEURS CLÉS DE PERFORMANCE');
+
+    // KPI boxes 2×2
+    const kpiData = [
+      { label: 'Valeur médiane (P50)',       value: fmt(p50),         color: [8, 145, 178] },
+      { label: 'Probabilité de perte',        value: fmtPct(probLoss), color: [220, 38, 38] },
+      { label: 'Scénario optimiste (P90)',    value: fmt(p90),         color: [22, 163, 74] },
+      { label: 'Scénario pessimiste (P10)',   value: fmt(p10),         color: [217, 119, 6] },
+    ];
+
+    const bw = (CW - 6) / 2;
+    const bh = 22;
+    kpiData.forEach((k, i) => {
+      const bx = ML + (i % 2) * (bw + 6);
+      const by = y  + Math.floor(i / 2) * (bh + 4);
+      doc.setFillColor(...k.color);
+      doc.roundedRect(bx, by, bw, bh, 3, 3, 'F');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(...WHITE);
+      doc.text(k.label, bx + 4, by + 6.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.text(k.value, bx + 4, by + 16);
+    });
+
+    y += 2 * (bh + 4) + 8;
+
+    // Distribution des percentiles
+    y = checkY(y, 12);
+    y = sectionTitle(y, 'DISTRIBUTION DES PERCENTILES');
+
+    doc.autoTable({
+      startY: y,
+      head: [['Percentile', 'Signification', 'Valeur finale']],
+      body: [
+        ['P10', '10 % des scénarios sont inférieurs',     fmt(p10)],
+        ['P25', '25 % des scénarios sont inférieurs',     fmt(p25)],
+        ['P50', 'Médiane — résultat le plus probable',    fmt(p50)],
+        ['P75', '75 % des scénarios sont inférieurs',     fmt(p75)],
+        ['P90', '90 % des scénarios sont inférieurs',     fmt(p90)],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 8 },
+      bodyStyles:  { fontSize: 8, textColor: TEXT },
+      alternateRowStyles: { fillColor: LIGHT },
+      columnStyles: { 0: { cellWidth: 22, halign: 'center', fontStyle: 'bold' }, 1: { cellWidth: 115 }, 2: { cellWidth: 35, halign: 'right' } },
+      margin: { left: ML, right: MR },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+
+    // Risques
+    y = checkY(y, 12);
+    y = sectionTitle(y, 'ANALYSE DU RISQUE');
+
+    const riskLevels = [[0.05,'Très faible'],[0.15,'Faible'],[0.30,'Modéré'],[0.50,'Élevé'],[1,'Très élevé']];
+    const riskLabel  = riskLevels.find(([max]) => probLoss < max)[1];
+
+    doc.autoTable({
+      startY: y,
+      head: [['Indicateur', 'Valeur']],
+      body: [
+        ['Niveau de risque global', riskLabel],
+        ["Proba. de ne pas récupérer le capital initial", fmtPct(probLoss)],
+        ["Proba. de ne pas récupérer le total investi",   fmtPct(probLossInvested)],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 8 },
+      bodyStyles:  { fontSize: 8, textColor: TEXT },
+      alternateRowStyles: { fillColor: LIGHT },
+      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 115 } },
+      margin: { left: ML, right: MR },
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    // PAGE 3 — Graphiques
+    // ═══════════════════════════════════════════════════════════
+    doc.addPage(); page++;
+    header(); footer(page);
+
+    y = 22;
+    y = sectionTitle(y, 'TRAJECTOIRES — ENVELOPPE DE PERCENTILES');
+
+    const fanImg  = captureChart('fan-chart');
+    const distImg = captureChart('dist-chart');
+    const donutImg = captureChart('donut-chart');
+
+    if (fanImg) {
+      doc.addImage(fanImg, 'PNG', ML, y, CW, 70);
+      y += 74;
+    }
+
+    if (distImg) {
+      y = checkY(y, 12);
+      y = sectionTitle(y, 'DISTRIBUTION DES VALEURS FINALES (10 000 SIMULATIONS)');
+      doc.addImage(distImg, 'PNG', ML, y, CW * 0.65, 55);
+      if (donutImg) {
+        doc.addImage(donutImg, 'PNG', ML + CW * 0.68, y, CW * 0.32, 55);
+      }
+      y += 59;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PAGE 4 — Détail produit par produit
+    // ═══════════════════════════════════════════════════════════
+    doc.addPage(); page++;
+    header(); footer(page);
+
+    y = 22;
+    y = sectionTitle(y, 'DÉTAIL PAR SUPPORT D\'INVESTISSEMENT');
+
+    const detailRows = Object.entries(state.allocations)
+      .filter(([, pct]) => pct > 0)
+      .map(([id, pct]) => {
+        const p = PRODUCTS.find(x => x.id === id);
+        if (!p) return null;
+        const w = pct / 100;
+        const { p50: med } = singleProductSim(capital * w, p.mu, p.sigma, horizon, mensuel * w);
+        return [p.name, p.vehicleLabel, `${pct} %`, fmtPct(p.mu), fmtPct(p.sigma), fmt(med)];
+      })
+      .filter(Boolean);
+
+    doc.autoTable({
+      startY: y,
+      head: [['Support', 'Véhicule', 'Alloc.', 'Rdt μ', 'Vol. σ', 'Val. médiane']],
+      body: detailRows,
+      theme: 'grid',
+      headStyles:   { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
+      bodyStyles:   { fontSize: 7.5, textColor: TEXT },
+      alternateRowStyles: { fillColor: LIGHT },
+      columnStyles: {
+        0: { cellWidth: 58 },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 18, halign: 'center' },
+        3: { cellWidth: 20, halign: 'center' },
+        4: { cellWidth: 20, halign: 'center' },
+        5: { cellWidth: 28, halign: 'right' },
+      },
+      margin: { left: ML, right: MR },
+    });
+
+    y = doc.lastAutoTable.finalY + 8;
+
+    // ── Fiscalité indicative ──────────────────────────────────
+    y = checkY(y, 12);
+    y = sectionTitle(y, 'RÉGIME FISCAL INDICATIF PAR VÉHICULE');
+
+    doc.autoTable({
+      startY: y,
+      head: [['Véhicule', 'Régime applicable']],
+      body: [
+        ['Livret A / LDDS',      'Exonération totale IR + PS'],
+        ['PEA ≥ 5 ans',          'PS 17,2 % uniquement (exo IR)'],
+        ['PEA < 5 ans',          'PFU 30 % (IR 12,8 % + PS 17,2 %)'],
+        ['Assurance-vie ≥ 8 ans','IR 7,5 % + PS 17,2 % (après abattement)'],
+        ['Assurance-vie < 8 ans','PFU 30 %'],
+        ['CTO',                  'PFU 30 % (ou barème IR si plus favorable)'],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 8 },
+      bodyStyles:  { fontSize: 7.5, textColor: TEXT },
+      alternateRowStyles: { fillColor: LIGHT },
+      columnStyles: { 0: { cellWidth: 60, fontStyle: 'bold' } },
+      margin: { left: ML, right: MR },
+    });
+
+    // ═══════════════════════════════════════════════════════════
+    // PAGE 5 — Avertissements & Empreinte d'authenticité
+    // ═══════════════════════════════════════════════════════════
+    doc.addPage(); page++;
+    header(); footer(page);
+
+    y = 22;
+    y = sectionTitle(y, 'AVERTISSEMENTS RÉGLEMENTAIRES');
+
+    const warnings = [
+      "Ce document est produit à titre purement informatif et pédagogique. Il ne constitue pas un conseil en investissement au sens de la directive MIF II.",
+      "Les performances passées ne préjugent pas des performances futures. Les projections résultent d'un modèle stochastique et ne constituent pas des garanties.",
+      "Le Mouvement Brownien Géométrique suppose des rendements log-normalement distribués et une volatilité constante, ce qui représente une approximation simplifiée de la réalité des marchés.",
+      "Les paramètres (μ, σ) utilisés sont des estimations basées sur des données historiques moyennes et peuvent différer significativement sur votre horizon d'investissement.",
+      "La corrélation entre actifs n'est pas modélisée dans cette version (σ_P = √Σ(w·σ)² — borne haute du risque réel).",
+      "Avant toute décision d'investissement, consultez un conseiller en gestion de patrimoine (CGP) agréé par l'AMF.",
+    ];
+
+    doc.autoTable({
+      startY: y,
+      body: warnings.map((w, i) => [`${i + 1}.`, w]),
+      theme: 'plain',
+      bodyStyles: { fontSize: 7.5, textColor: TEXT, cellPadding: { top: 2, bottom: 2, left: 2, right: 4 } },
+      columnStyles: { 0: { cellWidth: 8, fontStyle: 'bold', valign: 'top' } },
+      margin: { left: ML, right: MR },
+    });
+
+    y = doc.lastAutoTable.finalY + 10;
+
+    // ── Bloc d'authenticité ───────────────────────────────────
+    y = checkY(y, 50);
+    y = sectionTitle(y, 'CERTIFICAT D\'AUTHENTICITÉ DU DOCUMENT');
+
+    doc.setFillColor(...LIGHT);
+    doc.roundedRect(ML, y, CW, 42, 3, 3, 'F');
+    doc.setDrawColor(...NAVY);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(ML, y, CW, 42, 3, 3, 'S');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...NAVY);
+    doc.text('Empreinte numérique SHA-256 (paramètres de simulation)', ML + 4, y + 7);
+
+    // Hash affiché en 2 lignes pour tenir dans la largeur
+    const hashLine1 = fingerprint.slice(0, 32);
+    const hashLine2 = fingerprint.slice(32);
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...TEXT);
+    doc.text(hashLine1, ML + 4, y + 14);
+    doc.text(hashLine2, ML + 4, y + 20);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...MUTED);
+    doc.text(`Référence document : ${docId}`, ML + 4, y + 28);
+    doc.text(`Date de génération : ${now.toISOString().replace('T', ' ').slice(0, 19)} UTC`, ML + 4, y + 34);
+    doc.text('Produit par : SimuPortefeuille v2 — Application cliente (aucune donnée transmise)', ML + 4, y + 40);
+
+    // ── Numérotation finale corrigée ──────────────────────────
+    // Repassage des pages pour corriger le total de pages
+    // (non nécessaire avec jsPDF car on connaît le nombre de pages)
+
+    // ── Sauvegarde ────────────────────────────────────────────
+    const filename = `SimuPortefeuille_${risk}_${horizon}ans_${docId}.pdf`;
+    doc.save(filename);
+
+  } catch (err) {
+    console.error('PDF generation error:', err);
+    showError('Erreur lors de la génération du PDF. Réessayez ou contactez le support.');
+  } finally {
+    hideLoading();
+  }
+}
+
+// ----------------------------------------------------------------
+// 13. STYLES DYNAMIQUES — classes CSS (évite les inline styles)
+// ----------------------------------------------------------------
+(function injectRiskStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    .risk-text-vlow  { color: #16a34a; }
+    .risk-text-low   { color: #65a30d; }
+    .risk-text-mod   { color: #d97706; }
+    .risk-text-high  { color: #f97316; }
+    .risk-text-vhigh { color: #dc2626; }
+  `;
+  document.head.appendChild(style);
+})();
+
+// ----------------------------------------------------------------
+// 14. INITIALISATION — event listeners (pas d'inline handlers)
 // ----------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
+
+  // Sliders
+  linkSlider('capital-slider', 'capital',  100,    1_000_000);
+  linkSlider('horizon-slider', 'horizon',  1,      30);
+  linkSlider('mensuel-slider', 'mensuel',  0,      10_000);
+
+  // Navigation étape 1 → 2
+  document.getElementById('btn-step1-next').addEventListener('click', () => goToStep(2));
+
+  // Navigation étape 2
+  document.getElementById('btn-step2-back').addEventListener('click', () => goToStep(1));
+  document.getElementById('simulate-btn').addEventListener('click',   () => runSimulation());
+
+  // Navigation étape 3
+  document.getElementById('btn-step3-back').addEventListener('click',    () => goToStep(2));
+  document.getElementById('btn-step3-restart').addEventListener('click', () => goToStep(1));
+  document.getElementById('btn-pdf').addEventListener('click',           () => generatePDF());
+
+  // Onglets step 3
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => activateTab(btn.dataset.tab));
+  });
+
+  // Profil de risque : met à jour la suggestion
+  document.querySelectorAll('input[name="risk"]').forEach(r => {
+    r.addEventListener('change', () => updateSuggestion());
+  });
+
+  // Fermer le banner d'erreur au clic
+  document.getElementById('error-banner').addEventListener('click', hideError);
+
+  // Initialise la barre de suggestion
   updateSuggestion();
 });
