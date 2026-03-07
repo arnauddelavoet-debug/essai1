@@ -773,7 +773,7 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
 
       <div class="nav-row">
         <button class="btn btn-outline" onclick="goStep(1)">← Retour</button>
-        <button class="btn btn-primary" id="btnSimulate" onclick="runSimulation()" disabled>Simuler →</button>
+        <button class="btn btn-primary" id="btnSimulate" onclick="runSimulation()" disabled title="Le total doit être égal à 100 % pour lancer la simulation">Simuler →</button>
       </div>
     </div>
   </div>
@@ -944,7 +944,11 @@ function goStep(n) {
     }
   });
 
-  if (n === 2) buildAllocUI();
+  if (n === 2) {
+    // Auto-apply suggestion on first visit (when no allocation is set yet)
+    if (getAllocTotal() === 0) applySuggestion();
+    buildAllocUI();
+  }
   if (n === 3) renderResults();
 }
 
