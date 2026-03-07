@@ -1203,11 +1203,11 @@ function runSimulation() {
       stepVals.push(portfolioVal);
     }
     stepVals.sort((a,b) => a-b);
-    pctBands[5].push(stepVals[Math.floor(2000*0.05)]);
-    pctBands[25].push(stepVals[Math.floor(2000*0.25)]);
-    pctBands[50].push(stepVals[Math.floor(2000*0.50)]);
-    pctBands[75].push(stepVals[Math.floor(2000*0.75)]);
-    pctBands[95].push(stepVals[Math.floor(2000*0.95)]);
+    bandPaths[5].push(stepVals[Math.floor(2000*0.05)]);
+    bandPaths[25].push(stepVals[Math.floor(2000*0.25)]);
+    bandPaths[50].push(stepVals[Math.floor(2000*0.50)]);
+    bandPaths[75].push(stepVals[Math.floor(2000*0.75)]);
+    bandPaths[95].push(stepVals[Math.floor(2000*0.95)]);
   }
 
   // Tax computation per product median
@@ -1253,7 +1253,7 @@ function runSimulation() {
     finalVals, p5, p10, p50, p90,
     netMed, netPess, totalTax,
     portMu, portSigma,
-    pctBands, steps, dtStep,
+    pctBands: bandPaths, steps, dtStep,
     productMedians, fiscalByVehicle,
     activeProducts,
   };
