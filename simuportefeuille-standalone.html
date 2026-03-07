@@ -1116,7 +1116,8 @@ function boxMuller() {
 }
 
 function runSimulation() {
-  const N = 10000;
+  try {
+  const N = 3000;
   const T = state.horizon;
   const dt = 1;
 
@@ -1188,7 +1189,7 @@ function runSimulation() {
   for (let tIdx = 1; tIdx <= steps; tIdx++) {
     const tLocal = tIdx * dtStep;
     const stepVals = [];
-    for (let s = 0; s < 2000; s++) {
+    for (let s = 0; s < 500; s++) {
       let portfolioVal = 0;
       activeProducts.forEach(p => {
         const w = (state.alloc[p.id]||0) / 100;
@@ -1203,11 +1204,11 @@ function runSimulation() {
       stepVals.push(portfolioVal);
     }
     stepVals.sort((a,b) => a-b);
-    bandPaths[5].push(stepVals[Math.floor(2000*0.05)]);
-    bandPaths[25].push(stepVals[Math.floor(2000*0.25)]);
-    bandPaths[50].push(stepVals[Math.floor(2000*0.50)]);
-    bandPaths[75].push(stepVals[Math.floor(2000*0.75)]);
-    bandPaths[95].push(stepVals[Math.floor(2000*0.95)]);
+    bandPaths[5].push(stepVals[Math.floor(500*0.05)]);
+    bandPaths[25].push(stepVals[Math.floor(500*0.25)]);
+    bandPaths[50].push(stepVals[Math.floor(500*0.50)]);
+    bandPaths[75].push(stepVals[Math.floor(500*0.75)]);
+    bandPaths[95].push(stepVals[Math.floor(500*0.95)]);
   }
 
   // Tax computation per product median
@@ -1259,11 +1260,20 @@ function runSimulation() {
   };
 
   goStep(3);
+  } catch(err) {
+    console.error('runSimulation error:', err);
+    simResults = null;
+    goStep(3);
+  }
 }
 
 /* ---- RENDER RESULTS ---- */
 function renderResults() {
-  if (!simResults) return;
+  if (!simResults) {
+    document.getElementById('netHighlightValue').textContent = 'Erreur';
+    document.getElementById('netHighlightSub').textContent = 'Une erreur est survenue lors de la simulation. Vérifiez la console.';
+    return;
+  }
   const { finalVals, p5, p10, p50, p90, netMed, netPess, totalTax, portMu, portSigma, pctBands, steps, dtStep, productMedians, fiscalByVehicle, activeProducts } = simResults;
   const T = state.horizon;
   const cap = state.capital;
@@ -1384,6 +1394,21 @@ function drawHistogram(vals, cap) {
   const binW = (max - min) / bins;
   const counts = new Array(bins).fill(0);
   const labels = [];
+
+  // Handle binW === 0 (100% guaranteed portfolio: min === max)
+  if (binW === 0) {
+    labels.push((min/1000).toFixed(0) + 'k');
+    counts[0] = vals.length;
+    if (typeof Chart !== 'undefined') {
+      charts['hist'] = new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets: [{ data: counts, backgroundColor: [min < cap ? 'rgba(184,50,50,0.7)' : 'rgba(45,106,79,0.7)'], borderWidth: 0 }] },
+        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } }
+      });
+    }
+    return;
+  }
+
   for (let i = 0; i < bins; i++) {
     labels.push(((min + (i+0.5)*binW)/1000).toFixed(0) + 'k');
   }
@@ -1398,6 +1423,10 @@ function drawHistogram(vals, cap) {
     return midVal < cap ? 'rgba(184,50,50,0.7)' : 'rgba(45,106,79,0.7)';
   });
 
+  if (typeof Chart === 'undefined') {
+    ctx.canvas.parentElement.innerHTML = '<p style="color:var(--danger);font-size:.85rem;">Chart.js non chargé — vérifiez votre connexion Internet.</p>';
+    return;
+  }
   charts['hist'] = new Chart(ctx, {
     type: 'bar',
     data: { labels, datasets: [{ data: counts, backgroundColor: colors, borderWidth: 0 }] },
@@ -1417,6 +1446,10 @@ function drawHistogram(vals, cap) {
 function drawDonut(activeProducts) {
   destroyChart('donut');
   const ctx = document.getElementById('donutChart').getContext('2d');
+  if (typeof Chart === 'undefined') {
+    ctx.canvas.parentElement.innerHTML = '<p style="color:var(--danger);font-size:.85rem;">Chart.js non chargé.</p>';
+    return;
+  }
   const COLORS = ['#1c3053','#c5a028','#2d6a4f','#b83232','#1a5a8a','#6b6760','#8b5cf6','#0891b2','#d97706','#059669','#dc2626'];
   const labels = activeProducts.map(p => p.name);
   const data   = activeProducts.map(p => state.alloc[p.id]||0);
@@ -1440,6 +1473,10 @@ function drawDonut(activeProducts) {
 function drawFanChart(pctBands, steps, dtStep, T) {
   destroyChart('fan');
   const ctx = document.getElementById('fanChart').getContext('2d');
+  if (typeof Chart === 'undefined') {
+    ctx.canvas.parentElement.innerHTML = '<p style="color:var(--danger);font-size:.85rem;">Chart.js non chargé.</p>';
+    return;
+  }
   const labels = [];
   for (let i = 0; i <= steps; i++) labels.push((i*dtStep).toFixed(0) + ' an' + (i*dtStep>1?'s':''));
 
