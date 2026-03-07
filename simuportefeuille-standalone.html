@@ -4,32 +4,32 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SimuPortefeuille — Simulation d'actifs financiers</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <style>/* ========================================================
-   SimuPortefeuille — Stylesheet
+  <style>
+/* ========================================================
+   SimuPortefeuille — Stylesheet (Cabinet style)
    ======================================================== */
 
 :root {
-  --primary:    #2563eb;
-  --primary-dk: #1d4ed8;
-  --accent:     #7c3aed;
-  --success:    #16a34a;
-  --warning:    #d97706;
-  --danger:     #dc2626;
-  --info:       #0891b2;
+  --navy:    #1c3053;
+  --gold:    #c5a028;
+  --cream:   #f5f2ed;
+  --text:    #1a1a2e;
+  --muted:   #6b6760;
+  --border:  #ccc8c0;
+  --surface: #ffffff;
+  --success: #2d6a4f;
+  --danger:  #b83232;
+  --warning: #c07c1a;
+  --info:    #1a5a8a;
 
-  --bg:         #f8fafc;
-  --surface:    #ffffff;
-  --border:     #e2e8f0;
-  --text:       #1e293b;
-  --muted:      #64748b;
+  --radius:    6px;
+  --radius-sm: 4px;
+  --shadow:    0 2px 8px rgba(0,0,0,.07);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.05);
 
-  --radius:     12px;
-  --radius-sm:  8px;
-  --shadow:     0 2px 16px rgba(0,0,0,.08);
-  --shadow-sm:  0 1px 4px rgba(0,0,0,.06);
-
-  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font: 'DM Sans', system-ui, -apple-system, sans-serif;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -38,7 +38,7 @@ html { font-size: 16px; scroll-behavior: smooth; }
 
 body {
   font-family: var(--font);
-  background: var(--bg);
+  background: var(--cream);
   color: var(--text);
   min-height: 100vh;
   display: flex;
@@ -47,30 +47,43 @@ body {
 
 /* ---- HEADER ---- */
 header {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  background: var(--navy);
   color: #fff;
-  padding: 1.5rem 1rem;
-  text-align: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 3px solid var(--gold);
 }
 
-.header-inner { max-width: 800px; margin: 0 auto; }
+.header-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
 
-.logo {
+.logo-monogram {
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--gold);
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: .5rem;
-  margin-bottom: .25rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: -.5px;
+  flex-shrink: 0;
 }
 
-.logo-icon { font-size: 1.8rem; }
-.logo-text  { font-size: 1.5rem; font-weight: 700; letter-spacing: -.5px; }
-.header-sub { opacity: .85; font-size: .9rem; }
+.header-titles { flex: 1; }
+.header-titles h1 { font-size: 1.2rem; font-weight: 700; color: #fff; letter-spacing: .3px; }
+.header-sub { font-size: .8rem; color: rgba(255,255,255,.6); margin-top: .1rem; font-weight: 400; }
 
 /* ---- MAIN ---- */
 main {
   flex: 1;
-  max-width: 860px;
+  max-width: 960px;
   width: 100%;
   margin: 0 auto;
   padding: 1.5rem 1rem 3rem;
@@ -89,13 +102,13 @@ main {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: .3rem;
+  gap: .25rem;
   cursor: default;
 }
 
 .step-circle {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--border);
   color: var(--muted);
@@ -103,30 +116,31 @@ main {
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: .9rem;
+  font-size: .85rem;
   transition: background .3s, color .3s;
+  border: 2px solid var(--border);
 }
 
-.step.active   .step-circle { background: var(--primary); color: #fff; }
-.step.done     .step-circle { background: var(--success);  color: #fff; }
+.step.active   .step-circle { background: var(--navy); color: #fff; border-color: var(--navy); }
+.step.done     .step-circle { background: var(--success); color: #fff; border-color: var(--success); }
 
 .step span {
-  font-size: .75rem;
+  font-size: .7rem;
   color: var(--muted);
   font-weight: 600;
-  transition: color .3s;
+  letter-spacing: .3px;
+  text-transform: uppercase;
 }
-.step.active span { color: var(--primary); }
+.step.active span { color: var(--navy); }
 .step.done   span { color: var(--success); }
 
 .step-line {
   flex: 1;
-  height: 2px;
+  height: 1px;
   background: var(--border);
   min-width: 40px;
-  max-width: 120px;
+  max-width: 100px;
   margin-bottom: 20px;
-  transition: background .3s;
 }
 .step-line.done { background: var(--success); }
 
@@ -137,41 +151,46 @@ main {
   box-shadow: var(--shadow);
   padding: 1.75rem 1.5rem;
   margin-bottom: 1rem;
+  border: 1px solid var(--border);
 }
 
 .card h2 {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 700;
   margin-bottom: 1.25rem;
-  color: var(--text);
+  color: var(--navy);
+  padding-bottom: .6rem;
+  border-bottom: 2px solid var(--gold);
+  display: inline-block;
 }
 
 /* ---- STEP PANELS ---- */
 .step-panel        { display: none; }
-.step-panel.active { display: block; animation: fadeIn .3s ease; }
+.step-panel.active { display: block; animation: fadeIn .25s ease; }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ---- FORM ELEMENTS ---- */
-.form-group {
-  margin-bottom: 1.5rem;
-}
+.form-group { margin-bottom: 1.5rem; }
 
 .form-group label {
   display: block;
   font-weight: 600;
-  font-size: .875rem;
-  margin-bottom: .5rem;
+  font-size: .85rem;
+  margin-bottom: .45rem;
   color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: .4px;
 }
 
 .hint {
-  font-size: .85rem;
+  font-size: .82rem;
   color: var(--muted);
   margin-bottom: 1.25rem;
+  font-style: italic;
 }
 
 .input-row {
@@ -183,7 +202,7 @@ main {
 .input-with-unit {
   display: flex;
   align-items: center;
-  border: 1.5px solid var(--border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--surface);
@@ -194,1461 +213,1259 @@ main {
   outline: none;
   padding: .5rem .6rem;
   font-size: 1rem;
-  width: 80px;
+  width: 90px;
   text-align: right;
   color: var(--text);
   background: transparent;
+  font-family: var(--font);
 }
 
 .unit {
   padding: .5rem .6rem;
-  background: var(--bg);
+  background: var(--cream);
   color: var(--muted);
-  font-size: .8rem;
+  font-size: .78rem;
   white-space: nowrap;
   border-left: 1px solid var(--border);
+  font-weight: 600;
 }
 
 input[type="number"] {
-  border: 1.5px solid var(--border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: .5rem .75rem;
-  font-size: 1rem;
+  padding: .45rem .65rem;
+  font-size: .95rem;
   width: 110px;
   outline: none;
   color: var(--text);
   background: var(--surface);
   transition: border-color .2s;
+  font-family: var(--font);
 }
-input[type="number"]:focus { border-color: var(--primary); }
+input[type="number"]:focus { border-color: var(--navy); }
 
 input[type="range"] {
   flex: 1;
-  accent-color: var(--primary);
+  accent-color: var(--navy);
   cursor: pointer;
-  height: 4px;
+  height: 3px;
 }
+
+select {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .45rem .65rem;
+  font-size: .95rem;
+  outline: none;
+  color: var(--text);
+  background: var(--surface);
+  font-family: var(--font);
+  transition: border-color .2s;
+}
+select:focus { border-color: var(--navy); }
 
 /* ---- RISK CARDS ---- */
 .risk-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: .75rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: .65rem;
 }
 
 .risk-card input { display: none; }
 
 .risk-card-inner {
-  border: 2px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius);
-  padding: 1rem .875rem;
+  padding: .9rem .75rem;
   cursor: pointer;
   transition: border-color .2s, box-shadow .2s, background .2s;
   text-align: center;
 }
 
-.risk-card-inner:hover { border-color: var(--primary); }
+.risk-card-inner:hover { border-color: var(--navy); }
 
 .risk-card input:checked ~ .risk-card-inner {
-  border-color: var(--primary);
-  background: #eff6ff;
-  box-shadow: 0 0 0 3px rgba(37,99,235,.15);
+  border-color: var(--navy);
+  background: #eef1f7;
+  box-shadow: 0 0 0 2px rgba(28,48,83,.12);
 }
 
-.risk-icon  { font-size: 1.75rem; display: block; margin-bottom: .4rem; }
-.risk-card strong { display: block; font-size: .9rem; margin-bottom: .25rem; }
-.risk-card p { font-size: .78rem; color: var(--muted); }
+.risk-icon  { font-size: 1.6rem; display: block; margin-bottom: .35rem; }
+.risk-card strong { display: block; font-size: .85rem; margin-bottom: .2rem; color: var(--navy); }
+.risk-card p { font-size: .74rem; color: var(--muted); line-height: 1.35; }
 
-/* ---- PRODUCT GRID ---- */
-.products-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+/* ---- PRODUCTS (Step 2) ---- */
+.alloc-toolbar {
+  display: flex;
+  align-items: center;
   gap: .75rem;
   margin-bottom: 1rem;
-}
-
-.product-card {
-  border: 2px solid var(--border);
-  border-radius: var(--radius);
-  padding: .875rem;
-  transition: border-color .2s, box-shadow .2s;
-  background: var(--surface);
-}
-
-.product-card.active {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37,99,235,.12);
-}
-
-.product-header {
-  display: flex;
-  align-items: flex-start;
-  gap: .5rem;
-  margin-bottom: .6rem;
-}
-
-.product-icon { font-size: 1.4rem; flex-shrink: 0; }
-
-.product-info { flex: 1; min-width: 0; }
-.product-name { font-weight: 700; font-size: .9rem; line-height: 1.2; }
-
-.product-vehicle {
-  display: inline-block;
-  font-size: .68rem;
-  font-weight: 600;
-  padding: .15rem .45rem;
-  border-radius: 99px;
-  margin-top: .2rem;
-  background: var(--border);
-  color: var(--muted);
-}
-
-.vehicle-pea   { background: #dbeafe; color: #1d4ed8; }
-.vehicle-livret{ background: #dcfce7; color: #15803d; }
-.vehicle-av    { background: #fef3c7; color: #92400e; }
-.vehicle-cto   { background: #f3e8ff; color: #6d28d9; }
-
-.product-stats {
-  display: flex;
-  gap: .5rem;
-  margin-bottom: .6rem;
   flex-wrap: wrap;
 }
 
-.stat-pill {
-  font-size: .72rem;
-  padding: .2rem .5rem;
-  border-radius: 99px;
-  background: var(--bg);
-  color: var(--muted);
-  border: 1px solid var(--border);
+.total-badge {
+  font-weight: 700;
+  font-size: 1rem;
+  padding: .35rem .8rem;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--cream);
+  min-width: 110px;
+  text-align: center;
 }
+.total-badge.ok { color: var(--success); border-color: var(--success); background: #f0faf5; }
+.total-badge.over { color: var(--danger); border-color: var(--danger); background: #fdf2f2; }
+.total-badge.under { color: var(--warning); border-color: var(--warning); background: #fdf8f0; }
 
-.stat-pill.return { color: var(--success); border-color: #bbf7d0; background: #f0fdf4; }
-.stat-pill.vol    { color: var(--warning); border-color: #fed7aa; background: #fff7ed; }
-
-.product-pct-row {
+.alloc-list {
   display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+
+.alloc-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .7rem 1rem;
+  display: grid;
+  grid-template-columns: 2rem 1fr auto auto;
   align-items: center;
-  gap: .5rem;
+  gap: .6rem;
+  transition: border-color .2s, opacity .2s;
 }
 
-.product-pct-row label { font-size: .78rem; color: var(--muted); white-space: nowrap; }
+.alloc-row.off-profile {
+  opacity: .55;
+  background: #fafafa;
+}
 
-.product-pct-row input[type="number"] {
+.alloc-row.has-alloc {
+  border-color: var(--navy);
+}
+
+.alloc-icon { font-size: 1.2rem; text-align: center; }
+
+.alloc-meta { min-width: 0; }
+.alloc-name { font-weight: 600; font-size: .88rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.alloc-vehicle { font-size: .72rem; color: var(--muted); margin-top: .1rem; }
+
+.alloc-slider-wrap { display: flex; align-items: center; gap: .5rem; flex: 1; min-width: 120px; }
+.alloc-slider-wrap input[type="range"] { flex: 1; }
+
+.alloc-num-wrap input[type="number"] {
   width: 64px;
-  padding: .35rem .5rem;
+  text-align: right;
   font-size: .9rem;
+  padding: .3rem .4rem;
 }
 
-/* ---- TOTAL BAR ---- */
-.total-bar {
+/* ---- BUTTONS ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .6rem 1.2rem;
+  border-radius: var(--radius-sm);
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background .2s, color .2s, box-shadow .2s;
+  font-family: var(--font);
+  letter-spacing: .2px;
+}
+
+.btn-primary { background: var(--navy); color: #fff; }
+.btn-primary:hover { background: #253f6b; }
+
+.btn-gold { background: var(--gold); color: #fff; }
+.btn-gold:hover { background: #b8921e; }
+
+.btn-outline {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  color: var(--text);
+}
+.btn-outline:hover { border-color: var(--navy); color: var(--navy); }
+
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #9b2626; }
+
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.nav-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: .75rem 1rem;
-  background: var(--bg);
-  border-radius: var(--radius-sm);
-  border: 1.5px solid var(--border);
-  font-weight: 600;
-  font-size: .95rem;
+  margin-top: 1.25rem;
+  gap: .5rem;
 }
 
-.total-pct        { font-size: 1.2rem; font-weight: 700; }
-.total-pct.good   { color: var(--success); }
-.total-pct.over   { color: var(--danger); }
-.total-pct.neutral{ color: var(--muted); }
-
-/* ---- SUGGESTION BAR ---- */
-.suggestion-bar {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: var(--radius-sm);
-  padding: .6rem 1rem;
-  font-size: .82rem;
-  color: var(--primary-dk);
-  margin-bottom: 1rem;
+/* ---- RISK GAUGE ---- */
+.gauge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
-.suggestion-bar strong { font-weight: 700; }
+
+.gauge-bar {
+  flex: 1;
+  min-width: 160px;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(to right, #2d6a4f 0%, #c5a028 40%, #b83232 100%);
+  position: relative;
+  border: 1px solid var(--border);
+}
+
+.gauge-needle {
+  position: absolute;
+  top: -5px;
+  width: 4px;
+  height: 20px;
+  background: var(--navy);
+  border-radius: 2px;
+  transform: translateX(-50%);
+  transition: left .5s ease;
+}
+
+.gauge-label {
+  font-weight: 700;
+  font-size: .9rem;
+  min-width: 100px;
+  color: var(--navy);
+}
 
 /* ---- KPI GRID ---- */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: .75rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1rem;
-  border: 1.5px solid var(--border);
+  padding: 1rem 1.1rem;
+  box-shadow: var(--shadow-sm);
 }
 
-.kpi-card.kpi-danger  { border-color: #fca5a5; background: #fef2f2; }
-.kpi-card.kpi-info    { border-color: #67e8f9; background: #ecfeff; }
-.kpi-card.kpi-success { border-color: #86efac; background: #f0fdf4; }
-.kpi-card.kpi-warning { border-color: #fcd34d; background: #fffbeb; }
-
-.kpi-label { font-size: .75rem; font-weight: 600; color: var(--muted); margin-bottom: .35rem; text-transform: uppercase; letter-spacing: .3px; }
-.kpi-value { font-size: 1.6rem; font-weight: 800; margin-bottom: .2rem; }
-.kpi-card.kpi-danger  .kpi-value { color: var(--danger); }
-.kpi-card.kpi-info    .kpi-value { color: var(--info); }
-.kpi-card.kpi-success .kpi-value { color: var(--success); }
-.kpi-card.kpi-warning .kpi-value { color: var(--warning); }
-.kpi-sub { font-size: .78rem; color: var(--muted); }
-
-/* ---- GAUGE ---- */
-.gauge-section { margin-bottom: 1.5rem; }
-.gauge-section h3 { font-size: 1rem; margin-bottom: .75rem; }
-
-.gauge-wrap {
-  position: relative;
-  width: 100%;
-  max-width: 300px;
-  margin: 0 auto;
-  text-align: center;
+.kpi-label {
+  font-size: .74rem;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: .4rem;
 }
 
-.gauge-label {
-  position: absolute;
-  bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 1rem;
+.kpi-value {
+  font-size: 1.45rem;
   font-weight: 700;
-  color: var(--text);
-  white-space: nowrap;
+  color: var(--navy);
 }
 
-/* ---- CHARTS ---- */
-.chart-section {
-  margin-bottom: 1.75rem;
+.kpi-value.positive { color: var(--success); }
+.kpi-value.negative { color: var(--danger); }
+.kpi-value.gold     { color: var(--gold); }
+
+.kpi-sub {
+  font-size: .75rem;
+  color: var(--muted);
+  margin-top: .25rem;
 }
 
-.chart-section h3 { font-size: 1rem; margin-bottom: .75rem; }
-
-.chart-container {
-  position: relative;
-  width: 100%;
-  height: 260px;
+/* ---- FISCAL SECTION ---- */
+.fiscal-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow-sm);
 }
 
-.chart-section--half { max-width: 400px; margin-left: auto; margin-right: auto; }
-.chart-container--small { height: 240px; }
+.fiscal-section h3 {
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 1rem;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
 
-/* ---- DETAIL TABLE ---- */
+/* ---- TABLES ---- */
 .table-wrap { overflow-x: auto; }
 
-.detail-table {
+table {
   width: 100%;
   border-collapse: collapse;
-  font-size: .82rem;
+  font-size: .83rem;
 }
 
-.detail-table th {
+thead th {
+  background: var(--navy);
+  color: #fff;
+  padding: .5rem .7rem;
   text-align: left;
-  padding: .55rem .75rem;
-  background: var(--bg);
   font-weight: 600;
-  color: var(--muted);
-  border-bottom: 2px solid var(--border);
+  font-size: .75rem;
+  text-transform: uppercase;
+  letter-spacing: .4px;
   white-space: nowrap;
 }
 
-.detail-table td {
-  padding: .55rem .75rem;
-  border-bottom: 1px solid var(--border);
+tbody tr:nth-child(even) { background: var(--cream); }
+tbody tr:hover { background: #eef1f7; }
+
+tbody td {
+  padding: .5rem .7rem;
+  border-bottom: 1px solid #e8e4dc;
   vertical-align: middle;
+  white-space: nowrap;
 }
 
-.detail-table tr:last-child td { border-bottom: none; }
-.detail-table tr:hover td { background: var(--bg); }
-
-/* ---- EXPLAINER ---- */
-.explainer {
-  background: #f8fafc;
-  border-left: 4px solid var(--primary);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  padding: 1rem 1.25rem;
-  font-size: .875rem;
-  color: var(--text);
-  line-height: 1.6;
-  margin-bottom: 1.5rem;
-}
-
-.explainer h4 { margin-bottom: .5rem; font-size: .95rem; }
-.explainer ul { padding-left: 1.1rem; margin-top: .35rem; }
-.explainer li { margin-bottom: .2rem; }
-
-/* ---- BUTTONS ---- */
-.btn-row {
-  display: flex;
-  justify-content: flex-end;
-  gap: .75rem;
-  margin-top: 1.5rem;
-}
-
-.btn {
-  padding: .65rem 1.5rem;
-  border-radius: var(--radius-sm);
-  border: none;
-  font-size: .95rem;
+.tag {
+  display: inline-block;
+  padding: .15rem .4rem;
+  border-radius: 3px;
+  font-size: .7rem;
   font-weight: 600;
-  cursor: pointer;
-  transition: background .2s, transform .1s, box-shadow .2s;
+  letter-spacing: .2px;
+}
+.tag-livret { background: #e8f5e9; color: #2d6a4f; }
+.tag-pea    { background: #e3eaf6; color: var(--navy); }
+.tag-av     { background: #fdf3e3; color: var(--warning); }
+.tag-cto    { background: #fde8e8; color: var(--danger); }
+
+/* ---- CHARTS ---- */
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+@media (max-width: 640px) { .charts-grid { grid-template-columns: 1fr; } }
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  box-shadow: var(--shadow-sm);
 }
 
-.btn:active { transform: scale(.97); }
-
-.btn-primary {
-  background: var(--primary);
-  color: #fff;
+.chart-card h3 {
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: .75rem;
 }
-.btn-primary:hover { background: var(--primary-dk); box-shadow: 0 4px 12px rgba(37,99,235,.35); }
 
-.btn-secondary {
-  background: var(--bg);
-  color: var(--text);
-  border: 1.5px solid var(--border);
+.chart-full {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 1rem;
 }
-.btn-secondary:hover { background: var(--border); }
-
-.btn-outline {
-  background: transparent;
-  color: var(--primary);
-  border: 1.5px solid var(--primary);
+.chart-full h3 {
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: .75rem;
 }
-.btn-outline:hover { background: #eff6ff; }
 
 /* ---- FOOTER ---- */
 footer {
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  padding: 1rem;
+  background: var(--navy);
+  color: rgba(255,255,255,.55);
   text-align: center;
+  padding: 1.5rem 1rem;
   font-size: .78rem;
-  color: var(--muted);
   line-height: 1.6;
+  border-top: 2px solid var(--gold);
+}
+footer p { margin-bottom: .25rem; }
+footer .footer-author { color: rgba(255,255,255,.85); margin-top: .5rem; }
+footer .footer-author strong { color: var(--gold); }
+footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top: .5rem; max-width: 700px; margin-left: auto; margin-right: auto; }
+
+/* ---- MISC ---- */
+.section-title {
+  font-size: .8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--muted);
+  margin-bottom: .75rem;
+  margin-top: .25rem;
 }
 
-/* ---- RESPONSIVE ---- */
+.alert {
+  padding: .65rem .9rem;
+  border-radius: var(--radius-sm);
+  font-size: .84rem;
+  border-left: 3px solid;
+  margin-bottom: .75rem;
+}
+.alert-warning { background: #fdf8f0; border-color: var(--warning); color: var(--warning); }
+.alert-danger  { background: #fdf2f2; border-color: var(--danger);  color: var(--danger); }
+.alert-success { background: #f0faf5; border-color: var(--success); color: var(--success); }
+.alert-info    { background: #e8f0f8; border-color: var(--info);    color: var(--info); }
+
+.net-highlight {
+  background: var(--navy);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+.net-highlight .label { font-size: .85rem; opacity: .75; font-weight: 500; }
+.net-highlight .value { font-size: 1.7rem; font-weight: 700; color: var(--gold); }
+
+.horizon-tag {
+  display: inline-block;
+  font-size: .72rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: .1rem .35rem;
+  margin-left: .35rem;
+  vertical-align: middle;
+}
+
 @media (max-width: 600px) {
-  .card { padding: 1.25rem 1rem; }
-  .risk-cards { grid-template-columns: 1fr; }
-  .products-grid { grid-template-columns: 1fr; }
   .kpi-grid { grid-template-columns: 1fr 1fr; }
-  .btn-row { flex-direction: column-reverse; }
-  .btn { width: 100%; text-align: center; }
-  .chart-container { height: 200px; }
+  .alloc-row { grid-template-columns: 1.5rem 1fr auto; }
+  .alloc-slider-wrap { display: none; }
+  header { padding: .9rem 1rem; }
+  .card { padding: 1.25rem 1rem; }
 }
-
-@media (max-width: 380px) {
-  .kpi-grid { grid-template-columns: 1fr; }
-}
-</style>
+  </style>
 </head>
 <body>
 
 <header>
   <div class="header-inner">
-    <div class="logo">
-      <span class="logo-icon">📊</span>
-      <span class="logo-text">SimuPortefeuille</span>
+    <div class="logo-monogram">SP</div>
+    <div class="header-titles">
+      <h1>SimuPortefeuille</h1>
+      <div class="header-sub">Simulation patrimoniale · Monte Carlo · 10 000 scénarios</div>
     </div>
-    <p class="header-sub">Simulation de portefeuille financier &amp; analyse de risque</p>
   </div>
 </header>
 
 <main>
   <!-- STEPPER -->
-  <nav class="stepper" aria-label="Étapes">
-    <div class="step active" data-step="1">
-      <div class="step-circle">1</div>
-      <span>Profil</span>
-    </div>
-    <div class="step-line"></div>
-    <div class="step" data-step="2">
-      <div class="step-circle">2</div>
-      <span>Allocation</span>
-    </div>
-    <div class="step-line"></div>
-    <div class="step" data-step="3">
-      <div class="step-circle">3</div>
-      <span>Résultats</span>
-    </div>
-  </nav>
+  <div class="stepper">
+    <div class="step active" id="st1"><div class="step-circle">1</div><span>Profil</span></div>
+    <div class="step-line" id="sl1"></div>
+    <div class="step" id="st2"><div class="step-circle">2</div><span>Allocation</span></div>
+    <div class="step-line" id="sl2"></div>
+    <div class="step" id="st3"><div class="step-circle">3</div><span>Résultats</span></div>
+  </div>
 
-  <!-- ===== STEP 1 : PROFIL ===== -->
-  <section id="step-1" class="card step-panel active">
-    <h2>Votre profil d'investisseur</h2>
+  <!-- STEP 1 : PROFIL -->
+  <div class="step-panel active" id="panel1">
+    <div class="card">
+      <h2>Votre profil investisseur</h2>
 
-    <div class="form-group">
-      <label for="capital">Capital initial (€)</label>
-      <div class="input-row">
-        <input type="range" id="capital-slider" min="1000" max="200000" step="1000" value="10000" />
-        <input type="number" id="capital" min="100" max="1000000" value="10000" />
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label for="horizon">Horizon de placement</label>
-      <div class="input-row">
-        <input type="range" id="horizon-slider" min="1" max="30" step="1" value="10" />
-        <div class="input-with-unit">
-          <input type="number" id="horizon" min="1" max="30" value="10" />
-          <span class="unit">ans</span>
+      <div class="form-group">
+        <label>Capital à investir</label>
+        <div class="input-row">
+          <div class="input-with-unit">
+            <input type="number" id="capital" value="10000" min="1000" max="10000000" step="500">
+            <span class="unit">€</span>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="form-group">
-      <label>Tolérance au risque</label>
-      <div class="risk-cards">
-        <label class="risk-card">
-          <input type="radio" name="risk" value="conservateur" checked />
-          <div class="risk-card-inner">
-            <span class="risk-icon">🛡️</span>
-            <strong>Conservateur</strong>
-            <p>Priorité à la préservation du capital. Faible volatilité.</p>
+      <div class="form-group">
+        <label>Horizon de placement</label>
+        <div class="input-row">
+          <input type="range" id="horizonRange" min="1" max="30" value="10" style="flex:1;max-width:300px;">
+          <div class="input-with-unit">
+            <input type="number" id="horizonNum" value="10" min="1" max="30">
+            <span class="unit">ans</span>
           </div>
-        </label>
-        <label class="risk-card">
-          <input type="radio" name="risk" value="modere" />
-          <div class="risk-card-inner">
-            <span class="risk-icon">⚖️</span>
-            <strong>Modéré</strong>
-            <p>Équilibre rendement/risque. Volatilité maîtrisée.</p>
-          </div>
-        </label>
-        <label class="risk-card">
-          <input type="radio" name="risk" value="dynamique" />
-          <div class="risk-card-inner">
-            <span class="risk-icon">🚀</span>
-            <strong>Dynamique</strong>
-            <p>Recherche de performance. Accepte la volatilité.</p>
-          </div>
-        </label>
-      </div>
-    </div>
-
-    <div class="form-group">
-      <label>Versements mensuels (optionnel)</label>
-      <div class="input-row">
-        <input type="range" id="mensuel-slider" min="0" max="2000" step="50" value="0" />
-        <div class="input-with-unit">
-          <input type="number" id="mensuel" min="0" max="10000" value="0" />
-          <span class="unit">€/mois</span>
         </div>
       </div>
+
+      <div class="form-group">
+        <label>Tranche Marginale d'Imposition (TMI)</label>
+        <div class="hint">Votre tranche d'imposition sur le revenu — utilisée pour calculer le net après fiscalité.</div>
+        <select id="tmiSelect">
+          <option value="0">0 % — Non imposable</option>
+          <option value="11">11 % — Tranche 2</option>
+          <option value="30" selected>30 % — Tranche 3</option>
+          <option value="41">41 % — Tranche 4</option>
+          <option value="45">45 % — Tranche 5</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Profil de risque</label>
+        <div class="risk-cards">
+          <label class="risk-card">
+            <input type="radio" name="risk" value="conservateur" id="rConserv">
+            <div class="risk-card-inner">
+              <span class="risk-icon">🛡️</span>
+              <strong>Conservateur</strong>
+              <p>Préserver le capital, faible volatilité</p>
+            </div>
+          </label>
+          <label class="risk-card">
+            <input type="radio" name="risk" value="modere" id="rModere" checked>
+            <div class="risk-card-inner">
+              <span class="risk-icon">⚖️</span>
+              <strong>Modéré</strong>
+              <p>Équilibre rendement / risque</p>
+            </div>
+          </label>
+          <label class="risk-card">
+            <input type="radio" name="risk" value="dynamique" id="rDyn">
+            <div class="risk-card-inner">
+              <span class="risk-icon">🚀</span>
+              <strong>Dynamique</strong>
+              <p>Croissance, forte tolérance au risque</p>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="nav-row">
+        <span></span>
+        <button class="btn btn-primary" onclick="goStep(2)">Définir l'allocation →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2 : ALLOCATION -->
+  <div class="step-panel" id="panel2">
+    <div class="card">
+      <h2>Allocation du portefeuille</h2>
+      <div class="hint">Définissez librement le pourcentage alloué à chaque support. Les supports hors profil sont grisés mais restent accessibles. Le total doit être égal à 100 %.</div>
+
+      <div class="alloc-toolbar">
+        <div class="total-badge under" id="totalBadge">Total : 0 %</div>
+        <button class="btn btn-outline" id="btnSuggest" onclick="applySuggestion()">Appliquer la suggestion</button>
+        <button class="btn btn-outline" onclick="resetAlloc()">Réinitialiser</button>
+      </div>
+
+      <div class="alloc-list" id="allocList"></div>
+
+      <div class="nav-row">
+        <button class="btn btn-outline" onclick="goStep(1)">← Retour</button>
+        <button class="btn btn-primary" id="btnSimulate" onclick="runSimulation()" disabled>Simuler →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3 : RÉSULTATS -->
+  <div class="step-panel" id="panel3">
+    <!-- Net highlight -->
+    <div class="net-highlight" id="netHighlight">
+      <div>
+        <div class="label">Net médian après fiscalité</div>
+        <div style="font-size:.78rem;opacity:.6;margin-top:.15rem;" id="netHighlightSub">–</div>
+      </div>
+      <div class="value" id="netHighlightValue">–</div>
     </div>
 
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="goToStep(2)">Suivant →</button>
-    </div>
-  </section>
-
-  <!-- ===== STEP 2 : ALLOCATION ===== -->
-  <section id="step-2" class="card step-panel">
-    <h2>Allocation par produit</h2>
-    <p class="hint">Répartissez votre capital entre les différents supports. Total = 100 %</p>
-
-    <div id="allocation-suggestions" class="suggestion-bar"></div>
-
-    <div class="products-grid" id="products-grid">
-      <!-- Injected by JS -->
-    </div>
-
-    <div class="total-bar">
-      <span>Total alloué :</span>
-      <span id="total-pct" class="total-pct neutral">0 %</span>
-    </div>
-
-    <div class="btn-row">
-      <button class="btn btn-secondary" onclick="goToStep(1)">← Retour</button>
-      <button class="btn btn-primary" id="simulate-btn" onclick="runSimulation()">Simuler →</button>
-    </div>
-  </section>
-
-  <!-- ===== STEP 3 : RÉSULTATS ===== -->
-  <section id="step-3" class="card step-panel">
-    <h2>Résultats de la simulation</h2>
-    <p class="hint" id="sim-subtitle"></p>
-
-    <!-- KPI Cards -->
+    <!-- KPIs -->
     <div class="kpi-grid">
-      <div class="kpi-card kpi-danger">
-        <div class="kpi-label">Probabilité de perte en capital</div>
-        <div class="kpi-value" id="kpi-loss">—</div>
-        <div class="kpi-sub" id="kpi-loss-sub"></div>
+      <div class="kpi-card">
+        <div class="kpi-label">Perte en capital (P5)</div>
+        <div class="kpi-value" id="kpiLoss">–</div>
+        <div class="kpi-sub" id="kpiLossSub">–</div>
       </div>
-      <div class="kpi-card kpi-info">
-        <div class="kpi-label">Valeur médiane à l'échéance</div>
-        <div class="kpi-value" id="kpi-median">—</div>
-        <div class="kpi-sub" id="kpi-median-sub"></div>
+      <div class="kpi-card">
+        <div class="kpi-label">Valeur médiane brute</div>
+        <div class="kpi-value positive" id="kpiMed">–</div>
+        <div class="kpi-sub" id="kpiMedSub">–</div>
       </div>
-      <div class="kpi-card kpi-success">
-        <div class="kpi-label">Scénario optimiste (90e pct.)</div>
-        <div class="kpi-value" id="kpi-p90">—</div>
-        <div class="kpi-sub" id="kpi-p90-sub"></div>
+      <div class="kpi-card">
+        <div class="kpi-label">Net après fiscalité (médian)</div>
+        <div class="kpi-value gold" id="kpiNetMed">–</div>
+        <div class="kpi-sub" id="kpiNetMedSub">–</div>
       </div>
-      <div class="kpi-card kpi-warning">
-        <div class="kpi-label">Scénario pessimiste (10e pct.)</div>
-        <div class="kpi-value" id="kpi-p10">—</div>
-        <div class="kpi-sub" id="kpi-p10-sub"></div>
+      <div class="kpi-card">
+        <div class="kpi-label">Scénario pessimiste net (P10)</div>
+        <div class="kpi-value" id="kpiNetPess">–</div>
+        <div class="kpi-sub" id="kpiNetPessSub">–</div>
       </div>
     </div>
 
-    <!-- Risk gauge -->
-    <div class="gauge-section">
-      <h3>Niveau de risque global</h3>
+    <!-- Risque portefeuille -->
+    <div class="card" style="margin-bottom:1rem;">
+      <h2>Risque du portefeuille</h2>
       <div class="gauge-wrap">
-        <canvas id="gauge-chart" width="300" height="160"></canvas>
-        <div class="gauge-label" id="gauge-label">—</div>
+        <div class="gauge-bar"><div class="gauge-needle" id="gaugeNeedle"></div></div>
+        <div class="gauge-label" id="gaugeLabel">–</div>
       </div>
+      <div style="font-size:.8rem;color:var(--muted);margin-top:.6rem;" id="gaugeDetail">–</div>
     </div>
 
-    <!-- Distribution histogram -->
-    <div class="chart-section">
-      <h3>Distribution des valeurs finales (10 000 simulations)</h3>
-      <div class="chart-container">
-        <canvas id="dist-chart"></canvas>
-      </div>
-    </div>
-
-    <!-- Percentile fan chart -->
-    <div class="chart-section">
-      <h3>Trajectoires possibles dans le temps</h3>
-      <div class="chart-container">
-        <canvas id="fan-chart"></canvas>
-      </div>
-    </div>
-
-    <!-- Allocation donut -->
-    <div class="chart-section chart-section--half">
-      <h3>Répartition du portefeuille</h3>
-      <div class="chart-container chart-container--small">
-        <canvas id="donut-chart"></canvas>
-      </div>
-    </div>
-
-    <!-- Detail table -->
-    <div class="chart-section">
-      <h3>Détail par support</h3>
+    <!-- Fiscalité par véhicule -->
+    <div class="fiscal-section">
+      <h3>Breakdown fiscal par véhicule</h3>
       <div class="table-wrap">
-        <table class="detail-table" id="detail-table">
+        <table id="fiscalTable">
           <thead>
             <tr>
-              <th>Support</th>
               <th>Véhicule</th>
-              <th>Allocation</th>
-              <th>Rendement attendu</th>
-              <th>Volatilité</th>
-              <th>Valeur médiane</th>
+              <th>Capital alloué</th>
+              <th>PV brute médiane</th>
+              <th>Impôts estimés</th>
+              <th>Net récupéré</th>
             </tr>
           </thead>
-          <tbody></tbody>
+          <tbody id="fiscalBody"></tbody>
         </table>
       </div>
     </div>
 
-    <!-- Risk explanation -->
-    <div class="explainer" id="risk-explainer"></div>
-
-    <div class="btn-row">
-      <button class="btn btn-secondary" onclick="goToStep(2)">← Modifier</button>
-      <button class="btn btn-outline" onclick="goToStep(1)">Recommencer</button>
+    <!-- Charts -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3>Distribution finale (histogramme)</h3>
+        <canvas id="histChart" height="180"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Répartition du portefeuille</h3>
+        <canvas id="donutChart" height="180"></canvas>
+      </div>
     </div>
-  </section>
+
+    <div class="chart-full">
+      <h3>Évolution projetée — Trajectoires Monte Carlo (médiane + quantiles)</h3>
+      <canvas id="fanChart" height="200"></canvas>
+    </div>
+
+    <!-- Tableau détail produits -->
+    <div class="card">
+      <h2>Détail par support</h2>
+      <div class="table-wrap">
+        <table id="detailTable">
+          <thead>
+            <tr>
+              <th>Support</th>
+              <th>Véhicule</th>
+              <th>Alloc. %</th>
+              <th>Rdt attendu</th>
+              <th>Volatilité</th>
+              <th>PV brute méd.</th>
+              <th>Impôts est.</th>
+              <th>Net récupéré</th>
+            </tr>
+          </thead>
+          <tbody id="detailBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="nav-row">
+      <button class="btn btn-outline" onclick="goStep(2)">← Modifier l'allocation</button>
+      <button class="btn btn-gold" onclick="goStep(1)">Nouvelle simulation</button>
+    </div>
+  </div>
 </main>
 
 <footer>
   <p>Simulation à titre indicatif uniquement — Pas un conseil en investissement.</p>
   <p>Modèle de Mouvement Brownien Géométrique (Monte Carlo, 10 000 scénarios).</p>
+  <p class="footer-author">Développé par <strong>Arnaud DELAVOET</strong> — Tous droits réservés &copy; 2024</p>
+  <p class="footer-legal">Les résultats présentés sont des estimations statistiques. Les performances passées ne préjugent pas des performances futures. Ce simulateur ne constitue pas un conseil en investissement au sens de la réglementation MIF II.</p>
 </footer>
 
-<script>/* ================================================================
-   SimuPortefeuille — Main Application Logic
-   Monte Carlo simulation using Geometric Brownian Motion (GBM)
-   ================================================================ */
+<script>
+/* ============================================================
+   SimuPortefeuille — JavaScript
+   ============================================================ */
 
-'use strict';
-
-// ----------------------------------------------------------------
-// 1. PRODUCT CATALOGUE
-// ----------------------------------------------------------------
+/* ---- PRODUCTS ---- */
 const PRODUCTS = [
-  {
-    id: 'livret-a',
-    name: 'Livret A',
-    vehicle: 'Livret',
-    vehicleLabel: 'Livret A',
-    icon: '🏦',
-    mu: 0.03,          // expected annual return
-    sigma: 0.0,        // annual volatility
-    guaranteed: true,
-    minHorizon: 0,
-    riskProfile: ['conservateur', 'modere', 'dynamique'],
-    description: 'Épargne réglementée garantie à 3 % (taux 2024), plafond 22 950 €.',
-  },
-  {
-    id: 'ldds',
-    name: 'LDDS',
-    vehicle: 'Livret',
-    vehicleLabel: 'LDDS',
-    icon: '💚',
-    mu: 0.03,
-    sigma: 0.0,
-    guaranteed: true,
-    minHorizon: 0,
-    riskProfile: ['conservateur', 'modere', 'dynamique'],
-    description: 'Livret Développement Durable et Solidaire, taux identique au Livret A.',
-  },
-  {
-    id: 'fonds-euro',
-    name: 'Fonds Euro Assurance-vie',
-    vehicle: 'AV',
-    vehicleLabel: 'Assurance-vie',
-    icon: '🔒',
-    mu: 0.025,
-    sigma: 0.004,
-    guaranteed: false,
-    minHorizon: 3,
-    riskProfile: ['conservateur', 'modere'],
-    description: 'Capital quasi-garanti, rendement net ~2–2,5 % selon contrat.',
-  },
-  {
-    id: 'obligations-etat',
-    name: 'Obligations d\'État (ETF)',
-    vehicle: 'CTO',
-    vehicleLabel: 'CTO / AV',
-    icon: '🏛️',
-    mu: 0.038,
-    sigma: 0.06,
-    guaranteed: false,
-    minHorizon: 2,
-    riskProfile: ['conservateur', 'modere'],
-    description: 'Obligations souveraines européennes, faible risque, rendement ~3,5–4 %.',
-  },
-  {
-    id: 'scpi',
-    name: 'SCPI (Immobilier)',
-    vehicle: 'CTO',
-    vehicleLabel: 'CTO / AV',
-    icon: '🏢',
-    mu: 0.045,
-    sigma: 0.07,
-    guaranteed: false,
-    minHorizon: 8,
-    riskProfile: ['conservateur', 'modere', 'dynamique'],
-    description: 'Société civile de placement immobilier, rendement cible ~4–5 %.',
-  },
-  {
-    id: 'uc-oblig',
-    name: 'Unité de Compte Obligataire',
-    vehicle: 'AV',
-    vehicleLabel: 'Assurance-vie',
-    icon: '📄',
-    mu: 0.04,
-    sigma: 0.08,
-    guaranteed: false,
-    minHorizon: 3,
-    riskProfile: ['conservateur', 'modere'],
-    description: 'UC investies en obligations d\'entreprises, rendement ~3,5–4,5 %.',
-  },
-  {
-    id: 'etf-europe',
-    name: 'ETF Actions Europe',
-    vehicle: 'PEA',
-    vehicleLabel: 'PEA',
-    icon: '🇪🇺',
-    mu: 0.07,
-    sigma: 0.17,
-    guaranteed: false,
-    minHorizon: 5,
-    riskProfile: ['modere', 'dynamique'],
-    description: 'Indice Euro Stoxx 600, exposition actions européennes diversifiées.',
-  },
-  {
-    id: 'etf-monde',
-    name: 'ETF MSCI World',
-    vehicle: 'PEA',
-    vehicleLabel: 'PEA',
-    icon: '🌍',
-    mu: 0.075,
-    sigma: 0.16,
-    guaranteed: false,
-    minHorizon: 5,
-    riskProfile: ['modere', 'dynamique'],
-    description: 'Exposition mondiale ~1 600 sociétés, moteur de performance long terme.',
-  },
-  {
-    id: 'etf-emergents',
-    name: 'ETF Marchés Émergents',
-    vehicle: 'CTO',
-    vehicleLabel: 'CTO',
-    icon: '🌏',
-    mu: 0.085,
-    sigma: 0.22,
-    guaranteed: false,
-    minHorizon: 7,
-    riskProfile: ['dynamique'],
-    description: 'Asie, Amérique Latine, Moyen-Orient : fort potentiel, haute volatilité.',
-  },
-  {
-    id: 'uc-actions',
-    name: 'UC Actions Monde (AV)',
-    vehicle: 'AV',
-    vehicleLabel: 'Assurance-vie',
-    icon: '📈',
-    mu: 0.07,
-    sigma: 0.16,
-    guaranteed: false,
-    minHorizon: 5,
-    riskProfile: ['modere', 'dynamique'],
-    description: 'Unités de compte en actions mondiales au sein d\'une assurance-vie.',
-  },
-  {
-    id: 'crypto-btc',
-    name: 'Cryptomonnaies (panier)',
-    vehicle: 'CTO',
-    vehicleLabel: 'CTO',
-    icon: '₿',
-    mu: 0.12,
-    sigma: 0.60,
-    guaranteed: false,
-    minHorizon: 5,
-    riskProfile: ['dynamique'],
-    description: 'BTC/ETH — très haute volatilité, risque de perte totale, potentiel élevé.',
-  },
+  { id:'livret-a',       name:'Livret A',                    vehicle:'Livret', vehicleLabel:'Livret A',        vehicleFiscal:'Livret', icon:'🏦', mu:0.030, sigma:0.000, guaranteed:true,  minHorizon:0, riskProfile:['conservateur','modere','dynamique'], description:'Épargne réglementée garantie à 3%, plafond 22 950 €.' },
+  { id:'ldds',           name:'LDDS',                        vehicle:'Livret', vehicleLabel:'LDDS',             vehicleFiscal:'Livret', icon:'💚', mu:0.030, sigma:0.000, guaranteed:true,  minHorizon:0, riskProfile:['conservateur','modere','dynamique'], description:'Livret Développement Durable et Solidaire, taux identique au Livret A.' },
+  { id:'fonds-euro',     name:'Fonds Euro Assurance-vie',    vehicle:'AV',     vehicleLabel:'Assurance-vie',    vehicleFiscal:'AV',     icon:'🔒', mu:0.025, sigma:0.004, guaranteed:false, minHorizon:3, riskProfile:['conservateur','modere'],              description:'Capital quasi-garanti, rendement net ~2–2,5 %.' },
+  { id:'obligations-etat', name:"Obligations d'État (ETF)", vehicle:'CTO',    vehicleLabel:'CTO / AV',         vehicleFiscal:'CTO',    icon:'🏛️', mu:0.038, sigma:0.060, guaranteed:false, minHorizon:2, riskProfile:['conservateur','modere'],              description:'Obligations souveraines européennes, faible risque.' },
+  { id:'scpi',           name:'SCPI (Immobilier)',           vehicle:'CTO',    vehicleLabel:'CTO / AV',         vehicleFiscal:'CTO',    icon:'🏢', mu:0.045, sigma:0.070, guaranteed:false, minHorizon:8, riskProfile:['conservateur','modere','dynamique'], description:'Société civile de placement immobilier, rendement cible ~4–5 %.' },
+  { id:'uc-oblig',       name:'Unité de Compte Obligataire', vehicle:'AV',    vehicleLabel:'Assurance-vie',    vehicleFiscal:'AV',     icon:'📄', mu:0.040, sigma:0.080, guaranteed:false, minHorizon:3, riskProfile:['conservateur','modere'],              description:"UC investies en obligations d'entreprises." },
+  { id:'etf-europe',     name:'ETF Actions Europe',          vehicle:'PEA',    vehicleLabel:'PEA',              vehicleFiscal:'PEA',    icon:'🇪🇺', mu:0.070, sigma:0.170, guaranteed:false, minHorizon:5, riskProfile:['modere','dynamique'],              description:'Indice Euro Stoxx 600.' },
+  { id:'etf-monde',      name:'ETF MSCI World',              vehicle:'PEA',    vehicleLabel:'PEA',              vehicleFiscal:'PEA',    icon:'🌍', mu:0.075, sigma:0.160, guaranteed:false, minHorizon:5, riskProfile:['modere','dynamique'],              description:'Exposition mondiale ~1 600 sociétés.' },
+  { id:'etf-emergents',  name:'ETF Marchés Émergents',       vehicle:'CTO',    vehicleLabel:'CTO',              vehicleFiscal:'CTO',    icon:'🌏', mu:0.085, sigma:0.220, guaranteed:false, minHorizon:7, riskProfile:['dynamique'],                     description:'Asie, Amérique Latine, Moyen-Orient.' },
+  { id:'uc-actions',     name:'UC Actions Monde (AV)',       vehicle:'AV',     vehicleLabel:'Assurance-vie',    vehicleFiscal:'AV',     icon:'📈', mu:0.070, sigma:0.160, guaranteed:false, minHorizon:5, riskProfile:['modere','dynamique'],              description:"Unités de compte en actions mondiales au sein d'une assurance-vie." },
+  { id:'crypto-btc',     name:'Cryptomonnaies (panier)',     vehicle:'CTO',    vehicleLabel:'CTO',              vehicleFiscal:'CTO',    icon:'₿',  mu:0.120, sigma:0.600, guaranteed:false, minHorizon:5, riskProfile:['dynamique'],                     description:'BTC/ETH — très haute volatilité, risque de perte totale.' },
 ];
 
-// Suggested allocations by risk profile
-const SUGGESTIONS = {
-  conservateur: {
-    label: 'Profil conservateur recommandé',
-    alloc: { 'livret-a': 30, 'ldds': 10, 'fonds-euro': 40, 'obligations-etat': 20 },
-  },
-  modere: {
-    label: 'Profil modéré recommandé',
-    alloc: { 'fonds-euro': 20, 'uc-oblig': 15, 'scpi': 10, 'etf-europe': 30, 'etf-monde': 25 },
-  },
-  dynamique: {
-    label: 'Profil dynamique recommandé',
-    alloc: { 'etf-monde': 40, 'etf-europe': 25, 'etf-emergents': 20, 'uc-actions': 15 },
-  },
-};
-
-// ----------------------------------------------------------------
-// 2. STATE
-// ----------------------------------------------------------------
+/* ---- STATE ---- */
 let state = {
   capital: 10000,
   horizon: 10,
-  risk: 'conservateur',
-  mensuel: 0,
-  allocations: {},     // { productId: pctValue }
-  simResults: null,
+  tmi: 30,
+  risk: 'modere',
+  alloc: {},  // productId -> %
 };
 
 let charts = {};
+let simResults = null;
 
-// ----------------------------------------------------------------
-// 3. STEPPER
-// ----------------------------------------------------------------
-function goToStep(n) {
-  if (n === 2) {
-    readStep1();
-    renderProducts();
-  }
-  if (n === 3) {
-    if (!validateAllocations()) return;
-  }
-
-  document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
-  document.getElementById(`step-${n}`).classList.add('active');
-
-  document.querySelectorAll('.step').forEach(s => {
-    const sn = parseInt(s.dataset.step);
-    s.classList.toggle('active', sn === n);
-    s.classList.toggle('done', sn < n);
+/* ---- STEP NAVIGATION ---- */
+function goStep(n) {
+  [1,2,3].forEach(i => {
+    document.getElementById('panel'+i).classList.toggle('active', i===n);
+    const el = document.getElementById('st'+i);
+    el.classList.remove('active','done');
+    if (i < n)  el.classList.add('done');
+    if (i === n) el.classList.add('active');
+    if (i < n && i <= 2) {
+      const line = document.getElementById('sl'+i);
+      if (line) line.classList.add('done');
+    } else {
+      const line = document.getElementById('sl'+i);
+      if (line) line.classList.remove('done');
+    }
   });
 
-  document.querySelectorAll('.step-line').forEach((l, i) => {
-    l.classList.toggle('done', i < n - 1);
-  });
-
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (n === 2) buildAllocUI();
+  if (n === 3) renderResults();
 }
 
-// ----------------------------------------------------------------
-// 4. STEP 1 — Read inputs
-// ----------------------------------------------------------------
-function readStep1() {
-  state.capital  = parseFloat(document.getElementById('capital').value)  || 10000;
-  state.horizon  = parseInt(document.getElementById('horizon').value)    || 10;
-  state.risk     = document.querySelector('input[name="risk"]:checked').value;
-  state.mensuel  = parseFloat(document.getElementById('mensuel').value)  || 0;
-}
-
-function linkSlider(sliderId, inputId) {
-  const slider = document.getElementById(sliderId);
-  const input  = document.getElementById(inputId);
-  slider.addEventListener('input', () => { input.value = slider.value; });
-  input.addEventListener('input',  () => {
-    slider.value = Math.min(Math.max(input.value, slider.min), slider.max);
-  });
-}
-
-linkSlider('capital-slider',  'capital');
-linkSlider('horizon-slider',  'horizon');
-linkSlider('mensuel-slider',  'mensuel');
-
-// Risk card highlighting
+/* ---- PROFIL STEP ---- */
+document.getElementById('horizonRange').addEventListener('input', function() {
+  document.getElementById('horizonNum').value = this.value;
+  state.horizon = parseInt(this.value);
+});
+document.getElementById('horizonNum').addEventListener('input', function() {
+  let v = Math.max(1, Math.min(30, parseInt(this.value)||1));
+  this.value = v;
+  document.getElementById('horizonRange').value = v;
+  state.horizon = v;
+});
+document.getElementById('capital').addEventListener('input', function() {
+  state.capital = parseFloat(this.value)||10000;
+});
+document.getElementById('tmiSelect').addEventListener('change', function() {
+  state.tmi = parseInt(this.value);
+});
 document.querySelectorAll('input[name="risk"]').forEach(r => {
-  r.addEventListener('change', () => updateSuggestion());
+  r.addEventListener('change', function() { state.risk = this.value; });
 });
 
-// ----------------------------------------------------------------
-// 5. STEP 2 — Product rendering
-// ----------------------------------------------------------------
-function vehicleClass(v) {
-  if (v === 'PEA')    return 'vehicle-pea';
-  if (v === 'Livret') return 'vehicle-livret';
-  if (v === 'AV')     return 'vehicle-av';
-  return 'vehicle-cto';
-}
+/* ---- BUILD ALLOCATION UI ---- */
+function buildAllocUI() {
+  state.capital = parseFloat(document.getElementById('capital').value)||10000;
+  state.horizon = parseInt(document.getElementById('horizonRange').value)||10;
+  state.tmi     = parseInt(document.getElementById('tmiSelect').value)||30;
+  state.risk    = document.querySelector('input[name="risk"]:checked').value;
 
-function renderProducts() {
-  const risk    = document.querySelector('input[name="risk"]:checked').value;
-  const horizon = parseInt(document.getElementById('horizon').value) || 10;
-  const grid    = document.getElementById('products-grid');
-  grid.innerHTML = '';
-
-  const suggestion = SUGGESTIONS[risk];
-  state.allocations = { ...suggestion.alloc };
+  const list = document.getElementById('allocList');
+  list.innerHTML = '';
 
   PRODUCTS.forEach(p => {
-    const eligible = p.riskProfile.includes(risk) && p.minHorizon <= horizon;
-    const pct      = state.allocations[p.id] || 0;
+    const inProfile = p.riskProfile.includes(state.risk) && p.minHorizon <= state.horizon;
+    const val = state.alloc[p.id] || 0;
 
-    const card = document.createElement('div');
-    card.className = `product-card${pct > 0 ? ' active' : ''}${!eligible ? ' dimmed' : ''}`;
-    card.id = `card-${p.id}`;
+    const row = document.createElement('div');
+    row.className = 'alloc-row' + (inProfile ? '' : ' off-profile') + (val > 0 ? ' has-alloc' : '');
+    row.id = 'row-' + p.id;
 
-    card.innerHTML = `
-      <div class="product-header">
-        <span class="product-icon">${p.icon}</span>
-        <div class="product-info">
-          <div class="product-name">${p.name}</div>
-          <span class="product-vehicle ${vehicleClass(p.vehicle)}">${p.vehicleLabel}</span>
-        </div>
+    row.innerHTML = `
+      <div class="alloc-icon">${p.icon}</div>
+      <div class="alloc-meta">
+        <div class="alloc-name">${p.name}${!inProfile ? '<span class="horizon-tag">hors profil</span>' : ''}</div>
+        <div class="alloc-vehicle">${vehicleTag(p.vehicleFiscal)} · Rdt: ${(p.mu*100).toFixed(1)}% · Vol: ${(p.sigma*100).toFixed(0)}%</div>
       </div>
-      <div class="product-stats">
-        <span class="stat-pill return">~${(p.mu * 100).toFixed(1)} % /an</span>
-        <span class="stat-pill vol">σ ${(p.sigma * 100).toFixed(0)} %</span>
-        ${p.guaranteed ? '<span class="stat-pill" style="color:var(--success);border-color:#bbf7d0;background:#f0fdf4">Garanti</span>' : ''}
-        ${!eligible ? `<span class="stat-pill" style="color:var(--danger)">Horizon min. ${p.minHorizon} ans</span>` : ''}
+      <div class="alloc-slider-wrap">
+        <input type="range" id="slider-${p.id}" min="0" max="100" step="1" value="${val}">
       </div>
-      <div class="product-pct-row">
-        <label for="pct-${p.id}">Allocation :</label>
-        <input type="number" id="pct-${p.id}" min="0" max="100" step="5" value="${pct}"
-          ${!eligible ? 'disabled' : ''}
-          onchange="updateAlloc('${p.id}', this.value)"
-          oninput="updateAlloc('${p.id}', this.value)"
-        />
-        <span class="unit">%</span>
+      <div class="alloc-num-wrap">
+        <input type="number" id="num-${p.id}" min="0" max="100" step="1" value="${val}" style="width:60px;">
+        <span style="font-size:.8rem;color:var(--muted);margin-left:.2rem;">%</span>
       </div>
     `;
+    list.appendChild(row);
 
-    // tooltip
-    card.title = p.description;
-    grid.appendChild(card);
+    const slider = row.querySelector('#slider-'+p.id);
+    const numIn  = row.querySelector('#num-'+p.id);
+
+    slider.addEventListener('input', function() {
+      numIn.value = this.value;
+      state.alloc[p.id] = parseInt(this.value)||0;
+      updateAllocUI(p.id);
+    });
+    numIn.addEventListener('input', function() {
+      let v = Math.max(0, Math.min(100, parseInt(this.value)||0));
+      this.value = v;
+      slider.value = v;
+      state.alloc[p.id] = v;
+      updateAllocUI(p.id);
+    });
   });
 
-  updateSuggestion();
-  updateTotal();
+  updateTotalBadge();
 }
 
-function updateAlloc(id, val) {
-  const v = Math.max(0, Math.min(100, parseFloat(val) || 0));
-  state.allocations[id] = v;
-  const card = document.getElementById(`card-${id}`);
-  if (card) card.classList.toggle('active', v > 0);
-  updateTotal();
+function vehicleTag(v) {
+  const map = { Livret:'<span class="tag tag-livret">Livret</span>', PEA:'<span class="tag tag-pea">PEA</span>', AV:'<span class="tag tag-av">AV</span>', CTO:'<span class="tag tag-cto">CTO</span>' };
+  return map[v] || v;
 }
 
-function updateTotal() {
-  const total = Object.values(state.allocations).reduce((a, b) => a + b, 0);
-  const el    = document.getElementById('total-pct');
-  el.textContent = `${Math.round(total)} %`;
-  el.className = `total-pct ${total === 100 ? 'good' : total > 100 ? 'over' : 'neutral'}`;
-  document.getElementById('simulate-btn').disabled = Math.round(total) !== 100;
+function updateAllocUI(changedId) {
+  const row = document.getElementById('row-'+changedId);
+  const val = state.alloc[changedId] || 0;
+  if (val > 0) row.classList.add('has-alloc'); else row.classList.remove('has-alloc');
+  updateTotalBadge();
 }
 
-function updateSuggestion() {
-  const risk = document.querySelector('input[name="risk"]:checked').value;
-  const s    = SUGGESTIONS[risk];
-  const bar  = document.getElementById('allocation-suggestions');
-  if (!bar) return;
-  const parts = Object.entries(s.alloc)
-    .map(([id, pct]) => {
-      const p = PRODUCTS.find(x => x.id === id);
-      return p ? `${p.icon} ${p.name} <strong>${pct} %</strong>` : '';
-    }).join(' &nbsp;|&nbsp; ');
-  bar.innerHTML = `<strong>${s.label} :</strong> ${parts}`;
+function updateTotalBadge() {
+  const total = getAllocTotal();
+  const badge = document.getElementById('totalBadge');
+  badge.textContent = 'Total : ' + total + ' %';
+  badge.className = 'total-badge ' + (total === 100 ? 'ok' : total > 100 ? 'over' : 'under');
+  document.getElementById('btnSimulate').disabled = total !== 100;
 }
 
-function validateAllocations() {
-  const total = Object.values(state.allocations).reduce((a, b) => a + b, 0);
-  if (Math.round(total) !== 100) {
-    alert(`L'allocation doit totaliser 100 % (actuellement ${Math.round(total)} %)`);
-    return false;
+function getAllocTotal() {
+  return Object.values(state.alloc).reduce((s,v) => s + (parseInt(v)||0), 0);
+}
+
+function applySuggestion() {
+  const eligible = PRODUCTS.filter(p => p.riskProfile.includes(state.risk) && p.minHorizon <= state.horizon);
+  PRODUCTS.forEach(p => { state.alloc[p.id] = 0; });
+
+  if (eligible.length === 0) return;
+
+  // Simple equal-weight suggestion weighted by expected return
+  const totalMu = eligible.reduce((s,p) => s + p.mu, 0);
+  let remaining = 100;
+  eligible.forEach((p, i) => {
+    const pct = i === eligible.length-1 ? remaining : Math.round(p.mu / totalMu * 100);
+    state.alloc[p.id] = pct;
+    remaining -= pct;
+  });
+
+  // Re-render sliders
+  PRODUCTS.forEach(p => {
+    const slider = document.getElementById('slider-'+p.id);
+    const numIn  = document.getElementById('num-'+p.id);
+    if (slider && numIn) {
+      slider.value = state.alloc[p.id]||0;
+      numIn.value  = state.alloc[p.id]||0;
+      updateAllocUI(p.id);
+    }
+  });
+  updateTotalBadge();
+}
+
+function resetAlloc() {
+  PRODUCTS.forEach(p => { state.alloc[p.id] = 0; });
+  buildAllocUI();
+}
+
+/* ---- MONTE CARLO SIMULATION ---- */
+function calcTax(grossGain, vehicle, horizon, tmi) {
+  if (grossGain <= 0) return 0;
+  const ps = 0.172;
+  if (vehicle === 'Livret') return 0;
+  if (vehicle === 'PEA') {
+    return horizon >= 5 ? grossGain * ps : grossGain * 0.30;
   }
-  return true;
+  if (vehicle === 'AV') {
+    if (horizon >= 8) {
+      const abattem = 4600;
+      const taxable = Math.max(0, grossGain - abattem);
+      return Math.min(taxable * (0.075 + ps), taxable * (tmi/100 + ps));
+    }
+    return grossGain * 0.30;
+  }
+  // CTO
+  return Math.min(grossGain * 0.30, grossGain * (tmi/100 + ps));
 }
 
-// ----------------------------------------------------------------
-// 6. MONTE CARLO ENGINE
-// ----------------------------------------------------------------
-const N_SIMS = 10000;
-
-// Box-Muller transform — standard normal random
-function randn() {
+function boxMuller() {
   let u = 0, v = 0;
   while (u === 0) u = Math.random();
   while (v === 0) v = Math.random();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-}
-
-/**
- * Simulate a single path for a blended portfolio using GBM.
- * Returns array of yearly portfolio values [V0, V1, ..., VT].
- */
-function simulatePath(capital, mu, sigma, horizon, mensuel) {
-  const dt = 1 / 12; // monthly steps
-  const steps = Math.round(horizon * 12);
-  let V = capital;
-  const yearly = [capital];
-  let monthInYear = 0;
-
-  for (let i = 0; i < steps; i++) {
-    // GBM step
-    V = V * Math.exp((mu - 0.5 * sigma * sigma) * dt + sigma * Math.sqrt(dt) * randn());
-    // Monthly contribution
-    V += mensuel;
-    monthInYear++;
-    if (monthInYear === 12) {
-      yearly.push(V);
-      monthInYear = 0;
-    }
-  }
-  if (monthly => monthly && yearly.length < horizon + 1) yearly.push(V);
-  return yearly;
-}
-
-/**
- * Compute blended portfolio parameters from allocations.
- */
-function blendedParams(allocations) {
-  let mu = 0;
-  let varP = 0; // variance (assume independence)
-
-  for (const [id, pct] of Object.entries(allocations)) {
-    if (!pct) continue;
-    const w = pct / 100;
-    const p = PRODUCTS.find(x => x.id === id);
-    if (!p) continue;
-    mu   += w * p.mu;
-    varP += (w * p.sigma) ** 2;
-  }
-
-  return { mu, sigma: Math.sqrt(varP) };
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
 }
 
 function runSimulation() {
-  if (!validateAllocations()) return;
-  readStep1();
+  const N = 10000;
+  const T = state.horizon;
+  const dt = 1;
 
-  const { mu, sigma } = blendedParams(state.allocations);
-  const { capital, horizon, mensuel } = state;
+  // Portfolio blended params (for fan chart)
+  let portMu = 0, portSigma2 = 0;
+  const activeProducts = PRODUCTS.filter(p => (state.alloc[p.id]||0) > 0);
 
-  // Total invested (capital + contributions)
-  const totalInvested = capital + mensuel * 12 * horizon;
+  activeProducts.forEach(p => {
+    const w = (state.alloc[p.id]||0) / 100;
+    portMu     += w * p.mu;
+    portSigma2 += w * w * p.sigma * p.sigma;
+  });
+  const portSigma = Math.sqrt(portSigma2);
 
-  // Run Monte Carlo
-  const finalValues = new Array(N_SIMS);
-  const yearlyMedians = [];
+  // Per-product simulations (median final value)
+  const productMedians = {}; // id -> median final value
+  activeProducts.forEach(p => {
+    const w = (state.alloc[p.id]||0) / 100;
+    const cap = state.capital * w;
+    if (cap <= 0) { productMedians[p.id] = cap; return; }
 
-  // collect full paths for percentile fan
-  const pctPaths = { p10: [], p25: [], p50: [], p75: [], p90: [] };
-  const allPaths = [];
+    if (p.sigma === 0) {
+      productMedians[p.id] = cap * Math.pow(1 + p.mu, T);
+      return;
+    }
 
-  for (let i = 0; i < N_SIMS; i++) {
-    const path = simulatePath(capital, mu, sigma, horizon, mensuel);
-    finalValues[i] = path[path.length - 1];
-    allPaths.push(path);
-  }
-
-  // Sort finals
-  finalValues.sort((a, b) => a - b);
-
-  // Percentile helper
-  const pct = (arr, p) => {
-    const i = Math.floor(p / 100 * (arr.length - 1));
-    return arr[i];
-  };
-
-  // Per-year percentiles
-  for (let t = 0; t <= horizon; t++) {
-    const vals = allPaths.map(p => p[t]).sort((a, b) => a - b);
-    pctPaths.p10.push(pct(vals, 10));
-    pctPaths.p25.push(pct(vals, 25));
-    pctPaths.p50.push(pct(vals, 50));
-    pctPaths.p75.push(pct(vals, 75));
-    pctPaths.p90.push(pct(vals, 90));
-  }
-
-  // Probability of loss
-  const lossCount = finalValues.filter(v => v < capital).length;
-  const probLoss  = lossCount / N_SIMS;
-
-  // Probability of not recovering total invested (capital + contributions)
-  const lossInvestedCount = finalValues.filter(v => v < totalInvested).length;
-  const probLossInvested  = lossInvestedCount / N_SIMS;
-
-  state.simResults = {
-    mu, sigma,
-    totalInvested,
-    finalValues,
-    pctPaths,
-    probLoss,
-    probLossInvested,
-    p10: pct(finalValues, 10),
-    p25: pct(finalValues, 25),
-    p50: pct(finalValues, 50),
-    p75: pct(finalValues, 75),
-    p90: pct(finalValues, 90),
-  };
-
-  renderResults();
-  goToStep(3);
-}
-
-// ----------------------------------------------------------------
-// 7. RENDER RESULTS
-// ----------------------------------------------------------------
-function fmt(n) {
-  return n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' €';
-}
-
-function fmtPct(p) {
-  return (p * 100).toFixed(1) + ' %';
-}
-
-function renderResults() {
-  const { mu, sigma, probLoss, probLossInvested, p10, p25, p50, p75, p90,
-          finalValues, pctPaths, totalInvested } = state.simResults;
-  const { capital, horizon, mensuel } = state;
-
-  // Subtitle
-  document.getElementById('sim-subtitle').textContent =
-    `Capital : ${fmt(capital)} — Horizon : ${horizon} ans — ` +
-    `Versements : ${fmt(mensuel)}/mois — Rendement moyen : ${fmtPct(mu)} — Volatilité : ${fmtPct(sigma)}`;
-
-  // KPIs
-  document.getElementById('kpi-loss').textContent  = fmtPct(probLoss);
-  document.getElementById('kpi-loss-sub').textContent =
-    `(ne pas récupérer le capital initial de ${fmt(capital)})`;
-
-  document.getElementById('kpi-median').textContent  = fmt(p50);
-  document.getElementById('kpi-median-sub').textContent =
-    `+ ${fmtPct((p50 / capital - 1))} vs capital initial`;
-
-  document.getElementById('kpi-p90').textContent     = fmt(p90);
-  document.getElementById('kpi-p90-sub').textContent = `90 % des simulations sous ce seuil`;
-
-  document.getElementById('kpi-p10').textContent     = fmt(p10);
-  document.getElementById('kpi-p10-sub').textContent = `10 % des simulations sous ce seuil`;
-
-  // Gauge
-  renderGauge(probLoss);
-
-  // Histogram
-  renderHistogram(finalValues, capital, totalInvested);
-
-  // Fan chart
-  renderFanChart(pctPaths, horizon, capital);
-
-  // Donut
-  renderDonut();
-
-  // Table
-  renderTable(capital, horizon, mensuel);
-
-  // Explainer
-  renderExplainer(probLoss, probLossInvested, mu, sigma);
-}
-
-// ---- GAUGE ----
-function renderGauge(probLoss) {
-  const pct = Math.min(probLoss, 1);
-  const startAngle = Math.PI;
-  const endAngle   = 2 * Math.PI;
-  const fillAngle  = startAngle + pct * Math.PI;
-
-  const ctx = document.getElementById('gauge-chart').getContext('2d');
-
-  if (charts.gauge) charts.gauge.destroy();
-
-  // Color: green → yellow → red
-  const color = pct < 0.1 ? '#16a34a'
-              : pct < 0.3 ? '#d97706'
-              : '#dc2626';
-
-  charts.gauge = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      datasets: [{
-        data: [pct * 100, (1 - pct) * 100],
-        backgroundColor: [color, '#e2e8f0'],
-        borderWidth: 0,
-        circumference: 180,
-        rotation: 270,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { enabled: false },
-      },
-      cutout: '70%',
-    },
+    const vals = [];
+    for (let s = 0; s < N; s++) {
+      let v = cap;
+      for (let t = 0; t < T; t++) {
+        const z = boxMuller();
+        v *= Math.exp((p.mu - 0.5*p.sigma*p.sigma)*dt + p.sigma*Math.sqrt(dt)*z);
+      }
+      vals.push(v);
+    }
+    vals.sort((a,b) => a-b);
+    productMedians[p.id] = vals[Math.floor(N/2)];
   });
 
-  // Label
-  const label = pct < 0.05 ? '🟢 Très faible'
-              : pct < 0.15 ? '🟡 Faible'
-              : pct < 0.30 ? '🟠 Modéré'
-              : pct < 0.50 ? '🔴 Élevé'
-              : '⛔ Très élevé';
+  // Full portfolio Monte Carlo
+  const finalVals = [];
+  for (let s = 0; s < N; s++) {
+    let portfolioVal = 0;
+    activeProducts.forEach(p => {
+      const w = (state.alloc[p.id]||0) / 100;
+      const cap = state.capital * w;
+      if (p.sigma === 0) {
+        portfolioVal += cap * Math.pow(1 + p.mu, T);
+        return;
+      }
+      let v = cap;
+      for (let t = 0; t < T; t++) {
+        const z = boxMuller();
+        v *= Math.exp((p.mu - 0.5*p.sigma*p.sigma)*dt + p.sigma*Math.sqrt(dt)*z);
+      }
+      portfolioVal += v;
+    });
+    finalVals.push(portfolioVal);
+  }
+  finalVals.sort((a,b) => a-b);
 
-  document.getElementById('gauge-label').textContent = label;
+  // Fan chart paths (sample 5 representative paths + percentile bands)
+  const steps = Math.min(T, 30);
+  const dtStep = T / steps;
+  const pctBands = [5, 25, 50, 75, 95];
+  const bandPaths = {}; // pct -> array of T+1 values
+  pctBands.forEach(pct => { bandPaths[pct] = [state.capital]; });
+
+  for (let tIdx = 1; tIdx <= steps; tIdx++) {
+    const tLocal = tIdx * dtStep;
+    const stepVals = [];
+    for (let s = 0; s < 2000; s++) {
+      let portfolioVal = 0;
+      activeProducts.forEach(p => {
+        const w = (state.alloc[p.id]||0) / 100;
+        const cap = state.capital * w;
+        if (p.sigma === 0) {
+          portfolioVal += cap * Math.pow(1 + p.mu, tLocal);
+          return;
+        }
+        const z = boxMuller();
+        portfolioVal += cap * Math.exp((p.mu - 0.5*p.sigma*p.sigma)*tLocal + p.sigma*Math.sqrt(tLocal)*z);
+      });
+      stepVals.push(portfolioVal);
+    }
+    stepVals.sort((a,b) => a-b);
+    pctBands[5].push(stepVals[Math.floor(2000*0.05)]);
+    pctBands[25].push(stepVals[Math.floor(2000*0.25)]);
+    pctBands[50].push(stepVals[Math.floor(2000*0.50)]);
+    pctBands[75].push(stepVals[Math.floor(2000*0.75)]);
+    pctBands[95].push(stepVals[Math.floor(2000*0.95)]);
+  }
+
+  // Tax computation per product median
+  let totalTax = 0, totalNetGain = 0;
+  const fiscalByVehicle = {};
+
+  activeProducts.forEach(p => {
+    const w   = (state.alloc[p.id]||0) / 100;
+    const cap = state.capital * w;
+    const med = productMedians[p.id];
+    const grossGain = Math.max(0, med - cap);
+    const tax = calcTax(grossGain, p.vehicleFiscal, T, state.tmi);
+    const net = med - tax;
+    totalTax += tax;
+    totalNetGain += net;
+
+    const v = p.vehicleFiscal;
+    if (!fiscalByVehicle[v]) fiscalByVehicle[v] = { capital:0, grossGain:0, tax:0, net:0 };
+    fiscalByVehicle[v].capital   += cap;
+    fiscalByVehicle[v].grossGain += grossGain;
+    fiscalByVehicle[v].tax       += tax;
+    fiscalByVehicle[v].net       += net;
+  });
+
+  // P5, P10, P50, P90 portfolio
+  const p5  = finalVals[Math.floor(N*0.05)];
+  const p10 = finalVals[Math.floor(N*0.10)];
+  const p50 = finalVals[Math.floor(N*0.50)];
+  const p90 = finalVals[Math.floor(N*0.90)];
+
+  // Net of portfolio median (simple: tax on net portfolio gain proportionally)
+  const medBrut = p50;
+  const grossPortGain = Math.max(0, medBrut - state.capital);
+
+  // Net pessimistic (P10): estimate tax proportionally
+  const netMed  = totalNetGain;
+  const taxRate = grossPortGain > 0 ? totalTax / grossPortGain : 0;
+  const p10GrossGain = Math.max(0, p10 - state.capital);
+  const p10Tax  = p10GrossGain * taxRate;
+  const netPess = p10 - p10Tax;
+
+  simResults = {
+    finalVals, p5, p10, p50, p90,
+    netMed, netPess, totalTax,
+    portMu, portSigma,
+    pctBands, steps, dtStep,
+    productMedians, fiscalByVehicle,
+    activeProducts,
+  };
+
+  goStep(3);
 }
 
-// ---- HISTOGRAM ----
-function renderHistogram(finalValues, capital, totalInvested) {
-  const ctx = document.getElementById('dist-chart').getContext('2d');
-  if (charts.dist) charts.dist.destroy();
+/* ---- RENDER RESULTS ---- */
+function renderResults() {
+  if (!simResults) return;
+  const { finalVals, p5, p10, p50, p90, netMed, netPess, totalTax, portMu, portSigma, pctBands, steps, dtStep, productMedians, fiscalByVehicle, activeProducts } = simResults;
+  const T = state.horizon;
+  const cap = state.capital;
 
-  const min = finalValues[0];
-  const max = finalValues[finalValues.length - 1];
-  const bins = 50;
-  const binSize = (max - min) / bins;
+  const fmt = v => v.toLocaleString('fr-FR', { maximumFractionDigits:0 }) + ' €';
+  const fmtPct = v => (v >= 0 ? '+' : '') + (v*100).toFixed(1) + ' %';
 
+  /* KPIs */
+  const lossProb = finalVals.filter(v => v < cap).length / finalVals.length;
+
+  document.getElementById('kpiLoss').textContent = (lossProb*100).toFixed(1) + ' %';
+  document.getElementById('kpiLoss').className = 'kpi-value ' + (lossProb > 0.2 ? 'negative' : lossProb > 0.05 ? 'warning' : 'positive');
+  document.getElementById('kpiLossSub').textContent = 'Probabilité de moins-value · P5 = ' + fmt(p5);
+
+  document.getElementById('kpiMed').textContent = fmt(p50);
+  document.getElementById('kpiMedSub').textContent = fmtPct((p50-cap)/cap) + ' · Gain brut médian sur ' + T + ' ans';
+
+  document.getElementById('kpiNetMed').textContent = fmt(netMed);
+  document.getElementById('kpiNetMedSub').textContent = 'Après impôts · Fiscalité: ' + fmt(totalTax);
+
+  document.getElementById('kpiNetPess').textContent = fmt(netPess);
+  document.getElementById('kpiNetPess').className = 'kpi-value ' + (netPess < cap ? 'negative' : '');
+  document.getElementById('kpiNetPessSub').textContent = 'P10 net · ' + fmtPct((netPess-cap)/cap);
+
+  /* Net highlight */
+  document.getElementById('netHighlightValue').textContent = fmt(netMed);
+  document.getElementById('netHighlightSub').textContent = 'Capital investi : ' + fmt(cap) + ' · Gain net médian : ' + fmtPct((netMed-cap)/cap);
+
+  /* Gauge */
+  const gaugeNeedle = document.getElementById('gaugeNeedle');
+  const pct = Math.min(100, Math.max(0, portSigma / 0.60 * 100));
+  gaugeNeedle.style.left = pct + '%';
+  let riskLabel = 'Très faible';
+  if (portSigma > 0.04) riskLabel = 'Faible';
+  if (portSigma > 0.08) riskLabel = 'Modéré';
+  if (portSigma > 0.14) riskLabel = 'Élevé';
+  if (portSigma > 0.22) riskLabel = 'Très élevé';
+  document.getElementById('gaugeLabel').textContent = riskLabel + ' (' + (portSigma*100).toFixed(1) + '% vol.)';
+  document.getElementById('gaugeDetail').textContent =
+    'Rendement attendu du portefeuille : ' + (portMu*100).toFixed(2) + ' % · Volatilité annualisée : ' + (portSigma*100).toFixed(1) + ' %';
+
+  /* Fiscal table */
+  const fiscalBody = document.getElementById('fiscalBody');
+  fiscalBody.innerHTML = '';
+  ['Livret','PEA','AV','CTO'].forEach(v => {
+    const d = fiscalByVehicle[v];
+    if (!d || d.capital < 1) return;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${vehicleTag(v)}</td>
+      <td>${fmt(d.capital)}</td>
+      <td style="color:var(--success)">${fmt(d.capital + d.grossGain)}</td>
+      <td style="color:var(--danger)">${fmt(d.tax)}</td>
+      <td style="font-weight:700">${fmt(d.net)}</td>
+    `;
+    fiscalBody.appendChild(tr);
+  });
+
+  // Totals row
+  const allVehicles = Object.values(fiscalByVehicle);
+  if (allVehicles.length > 1) {
+    const totCap  = allVehicles.reduce((s,d)=>s+d.capital,0);
+    const totBrut = allVehicles.reduce((s,d)=>s+d.capital+d.grossGain,0);
+    const totTax  = allVehicles.reduce((s,d)=>s+d.tax,0);
+    const totNet  = allVehicles.reduce((s,d)=>s+d.net,0);
+    const trTot = document.createElement('tr');
+    trTot.style.fontWeight = '700';
+    trTot.style.borderTop  = '2px solid var(--navy)';
+    trTot.innerHTML = `
+      <td>Total</td>
+      <td>${fmt(totCap)}</td>
+      <td style="color:var(--success)">${fmt(totBrut)}</td>
+      <td style="color:var(--danger)">${fmt(totTax)}</td>
+      <td style="color:var(--navy)">${fmt(totNet)}</td>
+    `;
+    fiscalBody.appendChild(trTot);
+  }
+
+  /* Detail table */
+  const detailBody = document.getElementById('detailBody');
+  detailBody.innerHTML = '';
+  activeProducts.forEach(p => {
+    const w   = (state.alloc[p.id]||0);
+    const cap2 = state.capital * w / 100;
+    const med = productMedians[p.id];
+    const grossGain = Math.max(0, med - cap2);
+    const tax = calcTax(grossGain, p.vehicleFiscal, T, state.tmi);
+    const net = med - tax;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${p.icon} ${p.name}</td>
+      <td>${vehicleTag(p.vehicleFiscal)}</td>
+      <td>${w} %</td>
+      <td>${(p.mu*100).toFixed(1)} %</td>
+      <td>${(p.sigma*100).toFixed(0)} %</td>
+      <td style="color:var(--success)">${fmt(med)}</td>
+      <td style="color:var(--danger)">${fmt(tax)}</td>
+      <td style="font-weight:700">${fmt(net)}</td>
+    `;
+    detailBody.appendChild(tr);
+  });
+
+  /* Charts */
+  drawHistogram(finalVals, cap);
+  drawDonut(activeProducts);
+  drawFanChart(pctBands, steps, dtStep, T);
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+function drawHistogram(vals, cap) {
+  destroyChart('hist');
+  const ctx = document.getElementById('histChart').getContext('2d');
+  const min = vals[0], max = vals[vals.length-1];
+  const bins = 40;
+  const binW = (max - min) / bins;
   const counts = new Array(bins).fill(0);
   const labels = [];
-
   for (let i = 0; i < bins; i++) {
-    labels.push(Math.round(min + i * binSize));
+    labels.push(((min + (i+0.5)*binW)/1000).toFixed(0) + 'k');
   }
-
-  finalValues.forEach(v => {
-    const idx = Math.min(bins - 1, Math.floor((v - min) / binSize));
-    counts[idx]++;
+  vals.forEach(v => {
+    let b = Math.floor((v - min) / binW);
+    if (b >= bins) b = bins-1;
+    counts[b]++;
   });
 
-  // Color: red if below capital
-  const colors = labels.map((l, i) => {
-    const midPoint = l + binSize / 2;
-    return midPoint < capital ? 'rgba(220,38,38,.7)' : 'rgba(37,99,235,.6)';
+  const colors = labels.map((_, i) => {
+    const midVal = min + (i+0.5)*binW;
+    return midVal < cap ? 'rgba(184,50,50,0.7)' : 'rgba(45,106,79,0.7)';
   });
 
-  charts.dist = new Chart(ctx, {
+  charts['hist'] = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels: labels.map(l => fmt(l)),
-      datasets: [{
-        label: 'Simulations',
-        data: counts,
-        backgroundColor: colors,
-        borderWidth: 0,
-        borderRadius: 2,
-      }],
-    },
+    data: { labels, datasets: [{ data: counts, backgroundColor: colors, borderWidth: 0 }] },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => `${ctx.parsed.y} simulations`,
-            title: ctx => `Valeur ≈ ${ctx[0].label}`,
-          },
-        },
-        annotation: {},
-      },
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: ctx => ctx.parsed.y + ' scénarios' }
+      }},
       scales: {
-        x: {
-          ticks: {
-            maxTicksLimit: 8,
-            callback: (v, i) => i % 6 === 0 ? fmt(labels[i]) : '',
-            font: { size: 10 },
-          },
-          grid: { display: false },
-        },
-        y: {
-          ticks: { font: { size: 10 } },
-          grid: { color: '#f1f5f9' },
-        },
-      },
-    },
+        x: { ticks: { maxTicksLimit: 8, font: { size:10 } }, grid: { display:false } },
+        y: { ticks: { font: { size:10 } }, grid: { color:'rgba(0,0,0,.05)' } }
+      }
+    }
   });
 }
 
-// ---- FAN CHART ----
-function renderFanChart(pctPaths, horizon, capital) {
-  const ctx = document.getElementById('fan-chart').getContext('2d');
-  if (charts.fan) charts.fan.destroy();
+function drawDonut(activeProducts) {
+  destroyChart('donut');
+  const ctx = document.getElementById('donutChart').getContext('2d');
+  const COLORS = ['#1c3053','#c5a028','#2d6a4f','#b83232','#1a5a8a','#6b6760','#8b5cf6','#0891b2','#d97706','#059669','#dc2626'];
+  const labels = activeProducts.map(p => p.name);
+  const data   = activeProducts.map(p => state.alloc[p.id]||0);
 
-  const labels = Array.from({ length: horizon + 1 }, (_, i) => `An ${i}`);
+  charts['donut'] = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{ data, backgroundColor: COLORS.slice(0, activeProducts.length), borderWidth: 2, borderColor:'#fff' }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: {
+        legend: { position:'bottom', labels: { font: { size:10 }, padding:8, boxWidth:12 } },
+        tooltip: { callbacks: { label: ctx => ctx.label + ' : ' + ctx.parsed + ' %' } }
+      }
+    }
+  });
+}
 
-  charts.fan = new Chart(ctx, {
+function drawFanChart(pctBands, steps, dtStep, T) {
+  destroyChart('fan');
+  const ctx = document.getElementById('fanChart').getContext('2d');
+  const labels = [];
+  for (let i = 0; i <= steps; i++) labels.push((i*dtStep).toFixed(0) + ' an' + (i*dtStep>1?'s':''));
+
+  const fmt = v => (v/1000).toFixed(0) + 'k€';
+
+  charts['fan'] = new Chart(ctx, {
     type: 'line',
     data: {
       labels,
       datasets: [
-        {
-          label: '10e percentile',
-          data: pctPaths.p10,
-          borderColor: 'rgba(220,38,38,.8)',
-          backgroundColor: 'rgba(220,38,38,.05)',
-          borderWidth: 1.5,
-          borderDash: [4, 3],
-          pointRadius: 0,
-          fill: false,
-          tension: 0.3,
-        },
-        {
-          label: '25e percentile',
-          data: pctPaths.p25,
-          borderColor: 'rgba(249,115,22,.6)',
-          backgroundColor: 'rgba(249,115,22,.07)',
-          borderWidth: 1,
-          pointRadius: 0,
-          fill: '+1',
-          tension: 0.3,
-        },
-        {
-          label: 'Médiane (50e)',
-          data: pctPaths.p50,
-          borderColor: 'rgba(37,99,235,1)',
-          backgroundColor: 'rgba(37,99,235,.08)',
-          borderWidth: 2.5,
-          pointRadius: 3,
-          fill: false,
-          tension: 0.3,
-        },
-        {
-          label: '75e percentile',
-          data: pctPaths.p75,
-          borderColor: 'rgba(34,197,94,.6)',
-          backgroundColor: 'rgba(34,197,94,.07)',
-          borderWidth: 1,
-          pointRadius: 0,
-          fill: '-1',
-          tension: 0.3,
-        },
-        {
-          label: '90e percentile',
-          data: pctPaths.p90,
-          borderColor: 'rgba(22,163,74,.8)',
-          backgroundColor: 'rgba(22,163,74,.05)',
-          borderWidth: 1.5,
-          borderDash: [4, 3],
-          pointRadius: 0,
-          fill: false,
-          tension: 0.3,
-        },
-        {
-          label: 'Capital initial',
-          data: Array(horizon + 1).fill(capital),
-          borderColor: 'rgba(100,116,139,.5)',
-          borderWidth: 1,
-          borderDash: [6, 4],
-          pointRadius: 0,
-          fill: false,
-        },
-      ],
+        { label:'P95',  data: pctBands[95], borderColor:'rgba(197,160,40,.25)', backgroundColor:'rgba(197,160,40,.08)', fill:'+1', pointRadius:0, borderWidth:1 },
+        { label:'P75',  data: pctBands[75], borderColor:'rgba(28,48,83,.35)',   backgroundColor:'rgba(28,48,83,.08)',   fill:'+1', pointRadius:0, borderWidth:1 },
+        { label:'P50 (médiane)', data: pctBands[50], borderColor:'#1c3053',     backgroundColor:'transparent',          fill:false, pointRadius:0, borderWidth:2.5 },
+        { label:'P25',  data: pctBands[25], borderColor:'rgba(184,50,50,.35)',  backgroundColor:'rgba(184,50,50,.06)',  fill:'+1', pointRadius:0, borderWidth:1 },
+        { label:'P5',   data: pctBands[5],  borderColor:'rgba(184,50,50,.2)',   backgroundColor:'rgba(184,50,50,.06)',  fill:false, pointRadius:0, borderWidth:1 },
+      ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
+      responsive: true, maintainAspectRatio: true,
+      interaction: { mode:'index', intersect:false },
       plugins: {
-        legend: {
-          display: true,
-          position: 'bottom',
-          labels: { font: { size: 11 }, boxWidth: 20 },
-        },
-        tooltip: {
-          callbacks: {
-            label: ctx => `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`,
-          },
-        },
+        legend: { position:'bottom', labels: { font:{size:10}, padding:8, boxWidth:12 } },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ' : ' + fmt(ctx.parsed.y) } }
       },
       scales: {
-        x: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } },
-        y: {
-          grid: { color: '#f1f5f9' },
-          ticks: {
-            font: { size: 10 },
-            callback: v => v >= 1000 ? `${(v / 1000).toFixed(0)}k €` : `${v} €`,
-          },
-        },
-      },
-    },
+        x: { ticks: { font:{size:10} }, grid: { color:'rgba(0,0,0,.04)' } },
+        y: { ticks: { font:{size:10}, callback: v => (v/1000).toFixed(0)+'k' }, grid: { color:'rgba(0,0,0,.04)' } }
+      }
+    }
   });
 }
 
-// ---- DONUT ----
-function renderDonut() {
-  const ctx = document.getElementById('donut-chart').getContext('2d');
-  if (charts.donut) charts.donut.destroy();
-
-  const labels = [];
-  const data   = [];
-  const colors = ['#2563eb','#7c3aed','#16a34a','#d97706','#0891b2','#dc2626','#0d9488','#9333ea','#f59e0b','#6366f1','#ef4444'];
-
-  let ci = 0;
-  const bgColors = [];
-
-  for (const [id, pct] of Object.entries(state.allocations)) {
-    if (!pct) continue;
-    const p = PRODUCTS.find(x => x.id === id);
-    if (!p) continue;
-    labels.push(`${p.icon} ${p.name}`);
-    data.push(pct);
-    bgColors.push(colors[ci++ % colors.length]);
-  }
-
-  charts.donut = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels,
-      datasets: [{ data, backgroundColor: bgColors, borderWidth: 2, borderColor: '#fff' }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'bottom',
-          labels: { font: { size: 11 }, boxWidth: 14 },
-        },
-        tooltip: {
-          callbacks: { label: ctx => `${ctx.label}: ${ctx.parsed} %` },
-        },
-      },
-      cutout: '55%',
-    },
-  });
-}
-
-// ---- DETAIL TABLE ----
-function renderTable(capital, horizon, mensuel) {
-  const tbody = document.querySelector('#detail-table tbody');
-  tbody.innerHTML = '';
-
-  for (const [id, pct] of Object.entries(state.allocations)) {
-    if (!pct) continue;
-    const p = PRODUCTS.find(x => x.id === id);
-    if (!p) continue;
-
-    const w = pct / 100;
-    const allocated = capital * w;
-
-    // Simulate median for this product alone
-    const { p50 } = singleProductSim(allocated, p.mu, p.sigma, horizon, mensuel * w);
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${p.icon} <strong>${p.name}</strong></td>
-      <td><span class="product-vehicle ${vehicleClass(p.vehicle)}">${p.vehicleLabel}</span></td>
-      <td>${pct} %</td>
-      <td>${fmtPct(p.mu)}</td>
-      <td>${fmtPct(p.sigma)}</td>
-      <td>${fmt(p50)}</td>
-    `;
-    tbody.appendChild(tr);
-  }
-}
-
-function singleProductSim(capital, mu, sigma, horizon, mensuel) {
-  const N = 2000;
-  const finals = [];
-  for (let i = 0; i < N; i++) {
-    const path = simulatePath(capital, mu, sigma, horizon, mensuel);
-    finals.push(path[path.length - 1]);
-  }
-  finals.sort((a, b) => a - b);
-  return { p50: finals[Math.floor(N / 2)] };
-}
-
-// ---- EXPLAINER ----
-function renderExplainer(probLoss, probLossInvested, mu, sigma) {
-  const { capital, horizon, mensuel, simResults } = state;
-  const { p10, p50, p90 } = simResults;
-
-  let riskLevel, riskColor, advice;
-
-  if (probLoss < 0.05) {
-    riskLevel = 'Très faible';
-    riskColor = 'var(--success)';
-    advice = 'Votre portefeuille présente un risque de perte en capital très limité. Ce profil convient aux investisseurs privilégiant la sécurité et la liquidité.';
-  } else if (probLoss < 0.15) {
-    riskLevel = 'Faible';
-    riskColor = '#65a30d';
-    advice = 'Le risque est contenu. L\'horizon de placement et la diversification protègent bien votre capital.';
-  } else if (probLoss < 0.30) {
-    riskLevel = 'Modéré';
-    riskColor = 'var(--warning)';
-    advice = 'Une part non négligeable des scénarios peut conduire à une perte. Vérifiez que votre horizon est suffisamment long.';
-  } else if (probLoss < 0.50) {
-    riskLevel = 'Élevé';
-    riskColor = '#f97316';
-    advice = 'Risque significatif. Renforcez la part de produits garantis ou allongez votre horizon si possible.';
-  } else {
-    riskLevel = 'Très élevé';
-    riskColor = 'var(--danger)';
-    advice = 'Plus d\'une simulation sur deux aboutit à une perte. Reconsidérez votre allocation ou votre horizon.';
-  }
-
-  const totalInvested = capital + mensuel * 12 * horizon;
-
-  document.getElementById('risk-explainer').innerHTML = `
-    <h4>Analyse du risque — <span style="color:${riskColor}">${riskLevel}</span></h4>
-    <p>${advice}</p>
-    <ul>
-      <li>Probabilité de ne pas récupérer le capital initial (${fmt(capital)}) : <strong>${fmtPct(probLoss)}</strong></li>
-      <li>Probabilité de ne pas récupérer le total investi (${fmt(totalInvested)}) : <strong>${fmtPct(probLossInvested)}</strong></li>
-      <li>Rendement annuel moyen du portefeuille : <strong>${fmtPct(mu)}</strong></li>
-      <li>Volatilité annuelle globale : <strong>${fmtPct(sigma)}</strong></li>
-      <li>Fourchette de résultats à ${horizon} ans : de <strong>${fmt(p10)}</strong> (scén. pessimiste) à <strong>${fmt(p90)}</strong> (scén. optimiste)</li>
-      <li>La méthode Monte Carlo simule ${N_SIMS.toLocaleString('fr-FR')} trajectoires via un Mouvement Brownien Géométrique.</li>
-    </ul>
-  `;
-}
-
-// ----------------------------------------------------------------
-// 8. INIT
-// ----------------------------------------------------------------
-document.addEventListener('DOMContentLoaded', () => {
-  updateSuggestion();
-});
+/* ---- INIT ---- */
+goStep(1);
 </script>
 </body>
 </html>
