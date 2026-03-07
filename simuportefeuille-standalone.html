@@ -6,6 +6,8 @@
   <title>SimuPortefeuille — Simulation d'actifs financiers</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <style>
 /* ========================================================
    SimuPortefeuille — Stylesheet (Cabinet style)
@@ -963,8 +965,9 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
     <!-- Fiscalité par véhicule -->
     <div class="fiscal-section">
       <h3>Breakdown fiscal par véhicule
-        <span class="info-icon" style="font-style:normal;" data-tip="Estimations fiscales par enveloppe d'investissement, appliquées sur la plus-value médiane simulée. PEA : PS 17,2 % après 5 ans (flat tax 30 % avant). CTO : flat tax 30 % (PFU) ou TMI + PS si plus avantageux. Livrets : exonérés. Ces calculs sont indicatifs — consultez un conseiller fiscal pour votre situation.">ⓘ</span>
+        <span class="info-icon" style="font-style:normal;" data-tip="Estimations fiscales par enveloppe. PEA ≥5 ans : PS 17,2% uniquement (exonération IR). PEA &lt;5 ans : flat tax 30% (IR 12,8%+PS 17,2%). CTO : PFU 30% ou TMI+PS si plus avantageux. AV ≥8 ans : IR réduit 7,5%+PS (abatt. 4 600€) ou TMI+PS. Livrets : totalement exonérés. Calculs indicatifs.">ⓘ</span>
       </h3>
+      <p style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem;">PS = prélèvements sociaux 17,2 % (CSG 9,2 % + CRDS 0,5 % + Prélèvement de solidarité 7,5 %) — applicables sur tous les revenus du capital hors livrets réglementés.</p>
       <div class="table-wrap">
         <table id="fiscalTable">
           <thead>
@@ -972,7 +975,9 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
               <th>Véhicule</th>
               <th>Capital alloué</th>
               <th>PV brute médiane</th>
-              <th>Impôts estimés</th>
+              <th>dont IR</th>
+              <th>dont PS (17,2%)</th>
+              <th>Impôts totaux</th>
               <th>Net récupéré</th>
             </tr>
           </thead>
@@ -1020,7 +1025,8 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
               <th>Rdt attendu</th>
               <th>Volatilité</th>
               <th>PV brute méd.</th>
-              <th>Impôts est.</th>
+              <th>dont IR</th>
+              <th>dont PS (17,2%)</th>
               <th>Net récupéré</th>
             </tr>
           </thead>
@@ -1031,6 +1037,7 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
 
     <div class="nav-row">
       <button class="btn btn-outline" onclick="goStep(2)">← Modifier l'allocation</button>
+      <button class="btn btn-primary" onclick="generatePDF()" id="btnPDF" style="background:#1a5a8a;">&#11015; Télécharger le rapport PDF</button>
       <button class="btn btn-gold" onclick="goStep(1)">Nouvelle simulation</button>
     </div>
   </div>
@@ -1039,7 +1046,7 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
 <footer>
   <p>Simulation à titre indicatif uniquement — Pas un conseil en investissement.</p>
   <p>Modèle de Mouvement Brownien Géométrique (Monte Carlo, 3 000 scénarios).</p>
-  <p class="footer-author">Développé par <strong>Arnaud DELAVOET</strong> — Tous droits réservés &copy; 2024</p>
+  <p class="footer-author">Développé par <strong>Arnaud DELAVOET</strong> — Tous droits réservés &copy; 2026</p>
   <p class="footer-legal">Les résultats présentés sont des estimations statistiques. Les performances passées ne préjugent pas des performances futures. Ce simulateur ne constitue pas un conseil en investissement au sens de la réglementation MIF II.</p>
 </footer>
 
@@ -1386,22 +1393,41 @@ function resetAlloc() {
 
 /* ---- MONTE CARLO SIMULATION ---- */
 function calcTax(grossGain, vehicle, horizon, tmi) {
-  if (grossGain <= 0) return 0;
+  // Returns { irTax, psTax, total }
+  // PS (prélèvements sociaux) = 17,2% : CSG 9,2% + CRDS 0,5% + Prélèvement solidarité 7,5%
+  if (grossGain <= 0) return { irTax: 0, psTax: 0, total: 0 };
   const ps = 0.172;
-  if (vehicle === 'Livret') return 0;
+  if (vehicle === 'Livret') return { irTax: 0, psTax: 0, total: 0 };
   if (vehicle === 'PEA') {
-    return horizon >= 5 ? grossGain * ps : grossGain * 0.30;
+    if (horizon >= 5) {
+      // PEA ≥ 5 ans : exonération IR, PS uniquement
+      return { irTax: 0, psTax: grossGain * ps, total: grossGain * ps };
+    } else {
+      // PEA < 5 ans : flat tax 30% (IR 12,8% + PS 17,2%)
+      return { irTax: grossGain * 0.128, psTax: grossGain * ps, total: grossGain * 0.30 };
+    }
   }
   if (vehicle === 'AV') {
     if (horizon >= 8) {
       const abattem = 4600;
       const taxable = Math.max(0, grossGain - abattem);
-      return Math.min(taxable * (0.075 + ps), taxable * (tmi/100 + ps));
+      // Taux IR : min(7,5% réduit AV, TMI) — PS toujours 17,2%
+      const irRate = Math.min(0.075, tmi / 100);
+      const irTax = taxable * irRate;
+      const psTax = taxable * ps;
+      return { irTax, psTax, total: irTax + psTax };
     }
-    return grossGain * 0.30;
+    // AV < 8 ans : flat tax 30% (IR 12,8% + PS 17,2%)
+    return { irTax: grossGain * 0.128, psTax: grossGain * ps, total: grossGain * 0.30 };
   }
-  // CTO
-  return Math.min(grossGain * 0.30, grossGain * (tmi/100 + ps));
+  // CTO : PFU 30% (IR 12,8% + PS 17,2%) ou barème TMI + PS si plus avantageux
+  const flatTotal = grossGain * 0.30;
+  const tmiTotal  = grossGain * (tmi / 100 + ps);
+  if (flatTotal <= tmiTotal) {
+    return { irTax: grossGain * 0.128, psTax: grossGain * ps, total: flatTotal };
+  } else {
+    return { irTax: grossGain * (tmi / 100), psTax: grossGain * ps, total: tmiTotal };
+  }
 }
 
 function boxMuller() {
@@ -1516,15 +1542,18 @@ function runSimulation() {
     const cap = state.capital * w;
     const med = productMedians[p.id];
     const grossGain = Math.max(0, med - cap);
-    const tax = calcTax(grossGain, p.vehicleFiscal, T, state.tmi);
+    const taxDetail = calcTax(grossGain, p.vehicleFiscal, T, state.tmi);
+    const tax = taxDetail.total;
     const net = med - tax;
     totalTax += tax;
     totalNetGain += net;
 
     const v = p.vehicleFiscal;
-    if (!fiscalByVehicle[v]) fiscalByVehicle[v] = { capital:0, grossGain:0, tax:0, net:0 };
+    if (!fiscalByVehicle[v]) fiscalByVehicle[v] = { capital:0, grossGain:0, irTax:0, psTax:0, tax:0, net:0 };
     fiscalByVehicle[v].capital   += cap;
     fiscalByVehicle[v].grossGain += grossGain;
+    fiscalByVehicle[v].irTax     += taxDetail.irTax;
+    fiscalByVehicle[v].psTax     += taxDetail.psTax;
     fiscalByVehicle[v].tax       += tax;
     fiscalByVehicle[v].net       += net;
   });
@@ -1622,6 +1651,8 @@ function renderResults() {
       <td>${vehicleTag(v)}</td>
       <td>${fmt(d.capital)}</td>
       <td style="color:var(--success)">${fmt(d.capital + d.grossGain)}</td>
+      <td style="color:var(--danger)">${d.irTax > 0 ? fmt(d.irTax) : '—'}</td>
+      <td style="color:var(--danger)">${d.psTax > 0 ? fmt(d.psTax) : '—'}</td>
       <td style="color:var(--danger)">${fmt(d.tax)}</td>
       <td style="font-weight:700">${fmt(d.net)}</td>
     `;
@@ -1633,6 +1664,8 @@ function renderResults() {
   if (allVehicles.length > 1) {
     const totCap  = allVehicles.reduce((s,d)=>s+d.capital,0);
     const totBrut = allVehicles.reduce((s,d)=>s+d.capital+d.grossGain,0);
+    const totIR   = allVehicles.reduce((s,d)=>s+(d.irTax||0),0);
+    const totPS   = allVehicles.reduce((s,d)=>s+(d.psTax||0),0);
     const totTax  = allVehicles.reduce((s,d)=>s+d.tax,0);
     const totNet  = allVehicles.reduce((s,d)=>s+d.net,0);
     const trTot = document.createElement('tr');
@@ -1642,6 +1675,8 @@ function renderResults() {
       <td>Total</td>
       <td>${fmt(totCap)}</td>
       <td style="color:var(--success)">${fmt(totBrut)}</td>
+      <td style="color:var(--danger)">${totIR > 0 ? fmt(totIR) : '—'}</td>
+      <td style="color:var(--danger)">${totPS > 0 ? fmt(totPS) : '—'}</td>
       <td style="color:var(--danger)">${fmt(totTax)}</td>
       <td style="color:var(--navy)">${fmt(totNet)}</td>
     `;
@@ -1656,7 +1691,8 @@ function renderResults() {
     const cap2 = state.capital * w / 100;
     const med = productMedians[p.id];
     const grossGain = Math.max(0, med - cap2);
-    const tax = calcTax(grossGain, p.vehicleFiscal, T, state.tmi);
+    const taxDetail = calcTax(grossGain, p.vehicleFiscal, T, state.tmi);
+    const tax = taxDetail.total;
     const net = med - tax;
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -1666,7 +1702,8 @@ function renderResults() {
       <td>${(p.mu*100).toFixed(1)} %</td>
       <td>${(p.sigma*100).toFixed(0)} %</td>
       <td style="color:var(--success)">${fmt(med)}</td>
-      <td style="color:var(--danger)">${fmt(tax)}</td>
+      <td style="color:var(--danger)">${taxDetail.irTax > 0 ? fmt(taxDetail.irTax) : '—'}</td>
+      <td style="color:var(--danger)">${taxDetail.psTax > 0 ? fmt(taxDetail.psTax) : '—'}</td>
       <td style="font-weight:700">${fmt(net)}</td>
     `;
     detailBody.appendChild(tr);
@@ -1803,6 +1840,363 @@ function drawFanChart(pctBands, steps, dtStep, T) {
       }
     }
   });
+}
+
+/* ---- RAPPORT PDF ---- */
+function generatePDF() {
+  if (!simResults) { alert('Veuillez d\'abord lancer une simulation.'); return; }
+  if (typeof window.jspdf === 'undefined') {
+    alert('La bibliothèque jsPDF n\'est pas chargée. Vérifiez votre connexion Internet.');
+    return;
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const NAVY   = [28, 48, 83];
+  const GOLD   = [197, 160, 40];
+  const GREEN  = [45, 106, 79];
+  const RED    = [184, 50, 50];
+  const MUTED  = [107, 103, 96];
+  const CREAM  = [245, 242, 237];
+  const WHITE  = [255, 255, 255];
+
+  const { finalVals, p5, p10, p50, p90, netMed, netPess, totalTax, portMu, portSigma,
+          productMedians, fiscalByVehicle, activeProducts } = simResults;
+  const T   = state.horizon;
+  const cap = state.capital;
+
+  const fmtE  = v => v.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) + ' €';
+  const fmtP  = v => (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + ' %';
+
+  const LM = 15;   // left margin
+  const PW = 180;  // content width
+
+  /* ── PAGE 1 ── */
+
+  // Header band
+  doc.setFillColor(...NAVY);
+  doc.rect(0, 0, 210, 32, 'F');
+  doc.setFillColor(...GOLD);
+  doc.rect(0, 32, 210, 1.5, 'F');
+
+  // Monogram
+  doc.setFillColor(...GOLD);
+  doc.roundedRect(LM, 8, 14, 14, 2, 2, 'S');
+  doc.setTextColor(...GOLD);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('SP', LM + 7, 17, { align: 'center' });
+
+  doc.setTextColor(...WHITE);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text('SimuPortefeuille', LM + 17, 14);
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(200, 200, 210);
+  doc.text('Rapport de simulation patrimoniale — Confidentiel', LM + 17, 20);
+  doc.text('Généré le ' + new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }), LM + 17, 26);
+
+  let y = 40;
+
+  /* 1 — PARAMÈTRES */
+  const sectionTitle = (title, yPos) => {
+    doc.setTextColor(...NAVY);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, LM, yPos);
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.6);
+    doc.line(LM, yPos + 1.5, LM + 90, yPos + 1.5);
+  };
+
+  sectionTitle('1. Paramètres de la simulation', y);
+  y += 6;
+
+  const riskLabels = { conservateur: 'Conservateur (faible risque)', modere: 'Modéré (équilibre rendement/risque)', dynamique: 'Dynamique (forte croissance)' };
+  doc.autoTable({
+    startY: y,
+    body: [
+      ['Capital investi', fmtE(cap)],
+      ['Horizon de placement', T + ' an' + (T > 1 ? 's' : '')],
+      ['TMI (Tranche Marginale d\'Imposition)', state.tmi + ' %'],
+      ['Profil de risque', riskLabels[state.risk] || state.risk],
+      ['Nombre de scénarios Monte Carlo', '3 000'],
+      ['Modèle stochastique', 'Mouvement Brownien Géométrique (MBG)'],
+      ['Date de génération', new Date().toLocaleDateString('fr-FR')],
+    ],
+    margin: { left: LM },
+    tableWidth: 130,
+    styles: { fontSize: 9, cellPadding: 2.2 },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 80, textColor: [...MUTED] },
+      1: { cellWidth: 50, textColor: [30, 30, 50] },
+    },
+    theme: 'plain',
+    alternateRowStyles: { fillColor: [...CREAM] },
+  });
+  y = doc.lastAutoTable.finalY + 8;
+
+  /* 2 — INDICATEURS CLÉS */
+  sectionTitle('2. Indicateurs clés de performance', y);
+  y += 6;
+
+  const lossProb = finalVals.filter(v => v < cap).length / finalVals.length;
+  doc.autoTable({
+    startY: y,
+    head: [['Indicateur', 'Valeur', 'Complément']],
+    body: [
+      ['Net médian après fiscalité', fmtE(netMed), fmtP((netMed - cap) / cap) + ' vs capital initial'],
+      ['Valeur médiane brute (P50)', fmtE(p50), fmtP((p50 - cap) / cap) + ' brut avant impôts'],
+      ['Scénario défavorable net (P10)', fmtE(netPess), fmtP((netPess - cap) / cap) + ' — 10 % des cas en dessous'],
+      ['Scénario pessimiste brut (P5)', fmtE(p5), '5 % des scénarios sont inférieurs'],
+      ['Scénario optimiste brut (P90)', fmtE(p90), '90 % des scénarios sont inférieurs'],
+      ['Probabilité de perte à l\'échéance', (lossProb * 100).toFixed(1) + ' %', 'Part des scénarios où valeur < capital'],
+      ['Total impôts estimés (médiane)', fmtE(totalTax), 'sur la plus-value médiane du portefeuille'],
+      ['Rendement annuel attendu', (portMu * 100).toFixed(2) + ' % / an', 'Moyenne pondérée des supports'],
+      ['Volatilité annualisée', (portSigma * 100).toFixed(1) + ' % / an', 'Écart-type pondéré du portefeuille'],
+    ],
+    margin: { left: LM },
+    tableWidth: PW,
+    styles: { fontSize: 8.5, cellPadding: 2 },
+    headStyles: { fillColor: [...NAVY], textColor: [...WHITE], fontStyle: 'bold', fontSize: 8 },
+    alternateRowStyles: { fillColor: [...CREAM] },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 82 },
+      1: { cellWidth: 45, fontStyle: 'bold', textColor: [...NAVY] },
+      2: { cellWidth: 53, textColor: [...MUTED], fontSize: 7.5 },
+    },
+  });
+  y = doc.lastAutoTable.finalY + 8;
+
+  /* ── PAGE 2 si besoin ── */
+  if (y > 210) { doc.addPage(); y = 20; }
+
+  /* 3 — BREAKDOWN FISCAL */
+  sectionTitle('3. Breakdown fiscal par véhicule d\'investissement', y);
+  y += 4;
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(...MUTED);
+  doc.text('PS = Prélèvements Sociaux 17,2% (CSG 9,2% + CRDS 0,5% + Prélèvement de solidarité 7,5%) — calculés sur la plus-value médiane simulée.', LM, y + 3);
+  y += 8;
+
+  const fiscalRows = [];
+  ['Livret', 'PEA', 'AV', 'CTO'].forEach(v => {
+    const d = fiscalByVehicle[v];
+    if (!d || d.capital < 1) return;
+    let regime = '';
+    if (v === 'Livret') regime = 'Exonéré IR + PS';
+    else if (v === 'PEA') regime = T >= 5 ? 'PS uniquement (≥5 ans)' : 'Flat Tax 30% (<5 ans)';
+    else if (v === 'AV')  regime = T >= 8 ? 'IR réduit 7,5% + PS (≥8 ans)' : 'Flat Tax 30% (<8 ans)';
+    else if (v === 'CTO') regime = 'PFU 30% ou TMI+PS';
+    fiscalRows.push([
+      v, regime, fmtE(d.capital),
+      fmtE(d.capital + d.grossGain),
+      d.irTax > 0 ? fmtE(d.irTax) : '—',
+      d.psTax > 0 ? fmtE(d.psTax) : '—',
+      fmtE(d.tax), fmtE(d.net),
+    ]);
+  });
+  const allVehicles = Object.values(fiscalByVehicle);
+  if (allVehicles.length > 1) {
+    fiscalRows.push([
+      'TOTAL', '', fmtE(allVehicles.reduce((s, d) => s + d.capital, 0)),
+      fmtE(allVehicles.reduce((s, d) => s + d.capital + d.grossGain, 0)),
+      fmtE(allVehicles.reduce((s, d) => s + (d.irTax || 0), 0)),
+      fmtE(allVehicles.reduce((s, d) => s + (d.psTax || 0), 0)),
+      fmtE(allVehicles.reduce((s, d) => s + d.tax, 0)),
+      fmtE(allVehicles.reduce((s, d) => s + d.net, 0)),
+    ]);
+  }
+
+  doc.autoTable({
+    startY: y,
+    head: [['Véhicule', 'Régime fiscal', 'Capital', 'PV brute méd.', 'dont IR', 'dont PS', 'Total impôts', 'Net récupéré']],
+    body: fiscalRows,
+    margin: { left: LM },
+    tableWidth: PW,
+    styles: { fontSize: 7.5, cellPadding: 1.8 },
+    headStyles: { fillColor: [...NAVY], textColor: [...WHITE], fontStyle: 'bold', fontSize: 7 },
+    alternateRowStyles: { fillColor: [...CREAM] },
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 18 }, 1: { cellWidth: 38, fontSize: 6.5 } },
+    didParseCell: (data) => {
+      if (data.row.index === fiscalRows.length - 1 && allVehicles.length > 1) {
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fillColor = [220, 230, 245];
+      }
+    },
+  });
+  y = doc.lastAutoTable.finalY + 8;
+
+  /* ── PAGE 3 ── */
+  if (y > 200) { doc.addPage(); y = 20; }
+
+  /* 4 — DÉTAIL PAR SUPPORT */
+  sectionTitle('4. Détail par support d\'investissement', y);
+  y += 6;
+
+  const detailRows = activeProducts.map(p => {
+    const w     = (state.alloc[p.id] || 0);
+    const cap2  = cap * w / 100;
+    const med   = productMedians[p.id];
+    const gGain = Math.max(0, med - cap2);
+    const td    = calcTax(gGain, p.vehicleFiscal, T, state.tmi);
+    const net   = med - td.total;
+    return [
+      p.name, p.vehicleFiscal, w + ' %',
+      (p.mu * 100).toFixed(1) + ' %', (p.sigma * 100).toFixed(0) + ' %',
+      fmtE(med),
+      td.irTax > 0 ? fmtE(td.irTax) : '—',
+      td.psTax > 0 ? fmtE(td.psTax) : '—',
+      fmtE(net),
+    ];
+  });
+
+  doc.autoTable({
+    startY: y,
+    head: [['Support', 'Véhicule', 'Alloc.', 'Rdt moy.', 'Vol. ann.', 'PV brute méd.', 'dont IR', 'dont PS', 'Net récupéré']],
+    body: detailRows,
+    margin: { left: LM },
+    tableWidth: PW,
+    styles: { fontSize: 7.5, cellPadding: 1.8 },
+    headStyles: { fillColor: [...NAVY], textColor: [...WHITE], fontStyle: 'bold', fontSize: 7 },
+    alternateRowStyles: { fillColor: [...CREAM] },
+    columnStyles: { 0: { cellWidth: 52, fontSize: 6.8 }, 1: { cellWidth: 16 }, 2: { cellWidth: 13 } },
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  /* ── PAGE 4 — MÉTHODOLOGIE ── */
+  if (y > 210) { doc.addPage(); y = 20; }
+
+  sectionTitle('5. Méthodologie — Mouvement Brownien Géométrique (MBG)', y);
+  y += 7;
+
+  const writeBlock = (title, text) => {
+    if (y > 258) { doc.addPage(); y = 20; }
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...NAVY);
+    doc.text(title, LM, y);
+    y += 4;
+    doc.setFontSize(8.2);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(45, 45, 55);
+    const lines = doc.splitTextToSize(text, PW);
+    doc.text(lines, LM, y);
+    y += lines.length * 3.6 + 5;
+  };
+
+  writeBlock(
+    'Formule du Mouvement Brownien Géométrique',
+    'Pour chaque support i et chaque scénario s, la valeur finale est calculée par : V_i(T) = V_i(0) × exp[(μ_i − σ_i²/2)·T + σ_i·√T·Z] où Z ~ N(0,1) est tiré par la méthode de Box-Muller. Cette formule garantit que la valeur ne peut jamais devenir négative (propriété fondamentale du MBG). La valeur du portefeuille est la somme des valeurs de chaque support pondéré par son allocation.'
+  );
+
+  writeBlock(
+    'Calibration des paramètres (μ, σ)',
+    'Les rendements annuels attendus (μ) et volatilités annualisées (σ) sont des estimations calibrées sur des données historiques longues (>20 ans) et des consensus académiques. Exemples : ETF MSCI World μ=7,5% σ=15,5% | ETF S&P 500 μ=8,2% σ=17,0% | ETF Nasdaq 100 μ=9,0% σ=22,0% | ETF Obligations μ=3,6% σ=5,5% | Crypto BTC/ETH μ=12,0% σ=60,0% | Livret A/LDDS μ=2,4% σ=0% (garantis).'
+  );
+
+  writeBlock(
+    'Construction du fan chart et des percentiles',
+    'Pour chaque pas de temps t (jusqu\'à T), 500 simulations indépendantes sont lancées. Les valeurs sont triées et les percentiles P5, P25, P50, P75, P95 extraits. Le fan chart représente ces bandes de confiance : la bande centrale (P25–P75) couvre 50% des scénarios, la bande externe (P5–P95) en couvre 90%. La simulation finale (histogramme, KPIs) utilise 3 000 scénarios complets.'
+  );
+
+  writeBlock(
+    'Hypothèses de corrélation',
+    'La simulation actuelle traite chaque support de manière indépendante (corrélation nulle entre les actifs). En pratique, les actifs actions mondiaux présentent des corrélations positives significatives (notamment en période de crise), ce qui peut sous-estimer le risque de pertes simultanées. L\'introduction d\'une matrice de corrélation (modèle de Cholesky) constituerait une amélioration future du modèle.'
+  );
+
+  /* 6 — FISCALITÉ */
+  if (y > 210) { doc.addPage(); y = 20; }
+  sectionTitle('6. Fiscalité française des revenus du capital (2026)', y);
+  y += 7;
+
+  writeBlock(
+    'Prélèvements sociaux (PS) — 17,2%',
+    'Les prélèvements sociaux s\'appliquent sur tous les revenus du capital imposables et se décomposent comme suit : CSG (Contribution Sociale Généralisée) 9,2% + CRDS (Contribution au Remboursement de la Dette Sociale) 0,5% + Prélèvement de solidarité 7,5% = total 17,2%. Ils s\'appliquent sur les intérêts, dividendes et plus-values de toutes les enveloppes sauf les livrets réglementés (Livret A, LDDS, LEP).'
+  );
+
+  writeBlock(
+    'PEA (Plan d\'Épargne en Actions)',
+    'Après 5 ans de détention : exonération totale d\'IR, seuls les PS (17,2%) sont dus sur la plus-value. Avant 5 ans : flat tax 30% (PFU = IR 12,8% + PS 17,2%). Plafond de versements : 150 000 €. Le PEA est l\'enveloppe la plus efficiente fiscalement pour un horizon long (≥8–10 ans).'
+  );
+
+  writeBlock(
+    'CTO (Compte-Titres Ordinaire)',
+    'Application du Prélèvement Forfaitaire Unique (PFU / flat tax) à 30% = IR 12,8% + PS 17,2%, sauf option pour le barème progressif si plus avantageux (TMI < 12,8%). Le simulateur calcule automatiquement la solution la plus favorable selon la TMI renseignée. Les déficits de cession sont imputables sur les plus-values de même nature pendant 10 ans.'
+  );
+
+  writeBlock(
+    'Assurance-Vie (AV)',
+    'Après 8 ans : abattement annuel de 4 600 € (célibataire) ou 9 200 € (couple) sur les produits. Sur le montant imposable : taux réduit IR 7,5% + PS 17,2% = 24,7%, ou TMI + PS si plus avantageux. Avant 8 ans : flat tax 30%. L\'AV bénéficie également d\'avantages successoraux hors scope de ce simulateur.'
+  );
+
+  writeBlock(
+    'Livrets réglementés (Livret A, LDDS, LEP)',
+    'Totalement exonérés d\'IR et de PS. Taux garantis par l\'État, révisables périodiquement. Plafonds de versements réglementés (Livret A : 22 950 €, LDDS : 12 000 €, LEP : 10 000 € — réservé aux foyers sous plafond de revenus). Disponibilité immédiate des fonds.'
+  );
+
+  /* 7 — LIMITES */
+  if (y > 210) { doc.addPage(); y = 20; }
+  sectionTitle('7. Limites du modèle et précautions d\'interprétation', y);
+  y += 7;
+
+  writeBlock(
+    'Risques non modélisés',
+    '• Queues de distribution épaisses (fat tails) : le MBG sous-estime la probabilité des événements extrêmes (crises de 2000, 2008, 2020). • Changements de régime : bull/bear markets, variations des taux d\'intérêt. • Frais de gestion, frais de courtage, TER des ETF (typiquement 0,05%–0,50%/an) non déduits. • Inflation réelle non modélisée : les valeurs sont exprimées en euros courants, non en euros constants. • Risque de contrepartie, de liquidité, de change pour les ETF hors zone euro.'
+  );
+
+  writeBlock(
+    'Paramètres historiques vs futurs',
+    'Les rendements passés utilisés pour calibrer μ et σ ne garantissent pas les rendements futurs. Les marchés évoluent avec les cycles économiques, les politiques monétaires, et les transformations structurelles. Une surestimation du rendement attendu ou une sous-estimation de la volatilité conduiraient à des projections trop optimistes.'
+  );
+
+  writeBlock(
+    'Fiscalité et réglementation',
+    'La fiscalité française est susceptible d\'évoluer (évolution des taux de PS, du PFU, des abattements). Les calculs présentés sont basés sur la législation en vigueur au 01/01/2026 et constituent des estimations indicatives. La situation fiscale réelle dépend de nombreux facteurs individuels non pris en compte (revenus totaux, situation matrimoniale, CEHR, ISF/IFI…).'
+  );
+
+  /* 8 — AVERTISSEMENT */
+  if (y > 248) { doc.addPage(); y = 20; }
+  doc.setFillColor(...CREAM);
+  doc.rect(LM, y, PW, 30, 'F');
+  doc.setFillColor(...RED);
+  doc.rect(LM, y, 2, 30, 'F');
+
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...RED);
+  doc.text('AVERTISSEMENT RÉGLEMENTAIRE — MIF II', LM + 5, y + 5.5);
+
+  doc.setFontSize(7.8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(60, 60, 60);
+  const disclaimer = doc.splitTextToSize(
+    'Ce rapport est établi à titre indicatif uniquement et ne constitue pas un conseil en investissement au sens de la directive européenne MIF II (2014/65/UE). Les simulations présentées sont des estimations statistiques basées sur des modèles mathématiques simplifiant la réalité des marchés. Les performances passées ne préjugent pas des performances futures. Les résultats réels peuvent différer significativement des projections. Ce document ne prend pas en compte votre situation patrimoniale globale, vos objectifs personnels, ni l\'ensemble des risques inhérents à chaque instrument financier. Consultez un conseiller en gestion de patrimoine (CGP) agréé AMF ou un conseiller en investissements financiers (CIF) pour toute décision d\'investissement.',
+    PW - 8
+  );
+  doc.text(disclaimer, LM + 5, y + 11);
+  y += 33;
+
+  /* ── PIED DE PAGE sur toutes les pages ── */
+  const pgCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pgCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7);
+    doc.setTextColor(...MUTED);
+    doc.text(
+      'SimuPortefeuille \u00A9 2026 \u2014 Arnaud DELAVOET \u2014 Simulation indicative, pas un conseil en investissement  |  Page ' + i + ' / ' + pgCount,
+      105, 291, { align: 'center' }
+    );
+    doc.setDrawColor(...GOLD);
+    doc.setLineWidth(0.3);
+    doc.line(LM, 288, 195, 288);
+  }
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+  doc.save('SimuPortefeuille_rapport_' + dateStr + '.pdf');
 }
 
 /* ---- INIT ---- */
