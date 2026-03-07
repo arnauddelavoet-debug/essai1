@@ -335,10 +335,6 @@ select:focus { border-color: var(--navy); }
   transition: border-color .2s, opacity .2s;
 }
 
-.alloc-row.off-profile {
-  opacity: .55;
-  background: #fafafa;
-}
 
 .alloc-row.has-alloc {
   border-color: var(--navy);
@@ -640,16 +636,6 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
 .net-highlight .label { font-size: .85rem; opacity: .75; font-weight: 500; }
 .net-highlight .value { font-size: 1.7rem; font-weight: 700; color: var(--gold); }
 
-.horizon-tag {
-  display: inline-block;
-  font-size: .72rem;
-  color: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: .1rem .35rem;
-  margin-left: .35rem;
-  vertical-align: middle;
-}
 
 @media (max-width: 600px) {
   .kpi-grid { grid-template-columns: 1fr 1fr; }
@@ -667,7 +653,7 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
     <div class="logo-monogram">SP</div>
     <div class="header-titles">
       <h1>SimuPortefeuille</h1>
-      <div class="header-sub">Simulation patrimoniale · Monte Carlo · 10 000 scénarios</div>
+      <div class="header-sub">Simulation patrimoniale · Monte Carlo · 3 000 scénarios</div>
     </div>
   </div>
 </header>
@@ -761,7 +747,7 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
   <div class="step-panel" id="panel2">
     <div class="card">
       <h2>Allocation du portefeuille</h2>
-      <div class="hint">Définissez librement le pourcentage alloué à chaque support. Les supports hors profil sont grisés mais restent accessibles. Le total doit être égal à 100 %.</div>
+      <div class="hint">Définissez librement le pourcentage alloué à chaque support. Tous les supports sont accessibles. Le total doit être égal à 100 %.</div>
 
       <div class="alloc-toolbar">
         <div class="total-badge under" id="totalBadge">Total : 0 %</div>
@@ -890,7 +876,7 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
 
 <footer>
   <p>Simulation à titre indicatif uniquement — Pas un conseil en investissement.</p>
-  <p>Modèle de Mouvement Brownien Géométrique (Monte Carlo, 10 000 scénarios).</p>
+  <p>Modèle de Mouvement Brownien Géométrique (Monte Carlo, 3 000 scénarios).</p>
   <p class="footer-author">Développé par <strong>Arnaud DELAVOET</strong> — Tous droits réservés &copy; 2024</p>
   <p class="footer-legal">Les résultats présentés sont des estimations statistiques. Les performances passées ne préjugent pas des performances futures. Ce simulateur ne constitue pas un conseil en investissement au sens de la réglementation MIF II.</p>
 </footer>
@@ -945,9 +931,10 @@ function goStep(n) {
   });
 
   if (n === 2) {
-    // Auto-apply suggestion on first visit (when no allocation is set yet)
-    if (getAllocTotal() === 0) applySuggestion();
     buildAllocUI();
+    // Auto-apply suggestion on first visit (when no allocation is set yet)
+    // buildAllocUI must run first so DOM sliders exist before applySuggestion tries to update them
+    if (getAllocTotal() === 0) applySuggestion();
   }
   if (n === 3) renderResults();
 }
@@ -984,18 +971,16 @@ function buildAllocUI() {
   list.innerHTML = '';
 
   PRODUCTS.forEach(p => {
-    const horizonOk = p.minHorizon <= state.horizon;
     const val = state.alloc[p.id] || 0;
 
     const row = document.createElement('div');
-    row.className = 'alloc-row' + (!horizonOk ? ' off-profile' : '') + (val > 0 ? ' has-alloc' : '');
+    row.className = 'alloc-row' + (val > 0 ? ' has-alloc' : '');
     row.id = 'row-' + p.id;
 
-    const horizonTag = !horizonOk ? `<span class="horizon-tag">horizon min ${p.minHorizon} ans</span>` : '';
     row.innerHTML = `
       <div class="alloc-icon">${p.icon}</div>
       <div class="alloc-meta">
-        <div class="alloc-name">${p.name}${horizonTag}</div>
+        <div class="alloc-name">${p.name}</div>
         <div class="alloc-vehicle">${vehicleTag(p.vehicleFiscal)} · Rdt: ${(p.mu*100).toFixed(1)}% · Vol: ${(p.sigma*100).toFixed(0)}%</div>
       </div>
       <div class="alloc-slider-wrap">
