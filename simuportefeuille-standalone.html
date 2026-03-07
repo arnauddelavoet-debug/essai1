@@ -294,6 +294,133 @@ select:focus { border-color: var(--navy); }
 .risk-card strong { display: block; font-size: .85rem; margin-bottom: .2rem; color: var(--navy); }
 .risk-card p { font-size: .74rem; color: var(--muted); line-height: 1.35; }
 
+/* ---- INFO TOOLTIPS ---- */
+.info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--muted);
+  font-size: .65rem;
+  font-weight: 700;
+  font-style: normal;
+  cursor: help;
+  vertical-align: middle;
+  margin-left: .35rem;
+  position: relative;
+  flex-shrink: 0;
+}
+.info-icon:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a2e;
+  color: #fff;
+  font-size: .74rem;
+  font-weight: 400;
+  padding: .45rem .65rem;
+  border-radius: 4px;
+  white-space: normal;
+  width: 230px;
+  text-align: left;
+  z-index: 200;
+  line-height: 1.45;
+  box-shadow: 0 3px 12px rgba(0,0,0,.25);
+  pointer-events: none;
+}
+.info-icon:hover::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: #1a1a2e;
+  z-index: 200;
+  pointer-events: none;
+}
+
+/* ---- CHART COMMENT ---- */
+.chart-comment {
+  font-size: .78rem;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: .55rem;
+  line-height: 1.45;
+  padding: .4rem .55rem;
+  background: var(--cream);
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--border);
+}
+
+/* ---- ETF SELECTOR ---- */
+.etf-selector {
+  background: #f0f4fa;
+  border: 1px solid #c5d3e8;
+  border-radius: var(--radius);
+  padding: .85rem 1.1rem;
+  margin-bottom: 1rem;
+}
+.etf-selector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  gap: .5rem;
+}
+.etf-selector-title {
+  font-weight: 700;
+  font-size: .85rem;
+  color: var(--navy);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+.etf-toggle-btn {
+  font-size: .78rem;
+  color: var(--muted);
+  cursor: pointer;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .15rem .5rem;
+  font-family: var(--font);
+  white-space: nowrap;
+}
+.etf-selector-body { margin-top: .75rem; }
+.etf-group-label {
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--muted);
+  margin: .7rem 0 .3rem;
+}
+.etf-group-label:first-child { margin-top: 0; }
+.etf-checks { display: flex; flex-wrap: wrap; gap: .35rem; }
+.etf-check-item {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .3rem .65rem;
+  cursor: pointer;
+  font-size: .82rem;
+  transition: border-color .15s, background .15s;
+  white-space: nowrap;
+}
+.etf-check-item:hover { border-color: var(--navy); }
+.etf-check-item.checked { border-color: var(--navy); background: #eef1f7; font-weight: 600; }
+.etf-check-item input { cursor: pointer; accent-color: var(--navy); margin: 0; }
+.etf-hint { font-size: .76rem; color: var(--muted); margin-top: .5rem; font-style: italic; }
+
 /* ---- PRODUCTS (Step 2) ---- */
 .alloc-toolbar {
   display: flex;
@@ -747,7 +874,18 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
   <div class="step-panel" id="panel2">
     <div class="card">
       <h2>Allocation du portefeuille</h2>
-      <div class="hint">Définissez librement le pourcentage alloué à chaque support. Tous les supports sont accessibles. Le total doit être égal à 100 %.</div>
+      <div class="hint">Sélectionnez vos ETF ci-dessous, puis répartissez l'allocation. Le total doit être égal à 100 %.</div>
+
+      <!-- ETF Selector -->
+      <div class="etf-selector" id="etfSelectorPanel">
+        <div class="etf-selector-header" onclick="toggleEtfSelector()">
+          <span class="etf-selector-title">Sélecteur d'ETF &amp; supports</span>
+          <button class="etf-toggle-btn" id="etfToggleBtn">▲ Réduire</button>
+        </div>
+        <div class="etf-selector-body" id="etfSelectorBody">
+          <!-- built by JS -->
+        </div>
+      </div>
 
       <div class="alloc-toolbar">
         <div class="total-badge under" id="totalBadge">Total : 0 %</div>
@@ -769,7 +907,9 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
     <!-- Net highlight -->
     <div class="net-highlight" id="netHighlight">
       <div>
-        <div class="label">Net médian après fiscalité</div>
+        <div class="label">Net médian après fiscalité
+          <span class="info-icon" style="background:rgba(255,255,255,.2);color:#fff;" data-tip="Montant récupéré à l'échéance dans le scénario médian, après déduction de l'ensemble des impôts et prélèvements sociaux estimés selon votre TMI et les régimes fiscaux de chaque enveloppe (PEA, CTO, Livrets).">ⓘ</span>
+        </div>
         <div style="font-size:.78rem;opacity:.6;margin-top:.15rem;" id="netHighlightSub">–</div>
       </div>
       <div class="value" id="netHighlightValue">–</div>
@@ -778,22 +918,30 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
     <!-- KPIs -->
     <div class="kpi-grid">
       <div class="kpi-card">
-        <div class="kpi-label">Perte en capital (P5)</div>
+        <div class="kpi-label">Probabilité de perte (P5)
+          <span class="info-icon" data-tip="Sur 3 000 scénarios Monte Carlo, fraction des cas où le portefeuille vaut moins que le capital investi à l'échéance. P5 = valeur au 5e percentile (5 % des scénarios sont en dessous).">ⓘ</span>
+        </div>
         <div class="kpi-value" id="kpiLoss">–</div>
         <div class="kpi-sub" id="kpiLossSub">–</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Valeur médiane brute</div>
+        <div class="kpi-label">Valeur médiane brute
+          <span class="info-icon" data-tip="Valeur du portefeuille au 50e percentile (médiane) à l'échéance, avant impôts. 50 % des scénarios aboutissent à une valeur supérieure, 50 % à une valeur inférieure.">ⓘ</span>
+        </div>
         <div class="kpi-value positive" id="kpiMed">–</div>
         <div class="kpi-sub" id="kpiMedSub">–</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Net après fiscalité (médian)</div>
+        <div class="kpi-label">Net après fiscalité (médian)
+          <span class="info-icon" data-tip="Valeur médiane nette après déduction des impôts estimés selon votre TMI et le régime fiscal de chaque véhicule (PEA, CTO, Livret). Prend en compte les abattements et taux spécifiques à chaque enveloppe.">ⓘ</span>
+        </div>
         <div class="kpi-value gold" id="kpiNetMed">–</div>
         <div class="kpi-sub" id="kpiNetMedSub">–</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Scénario pessimiste net (P10)</div>
+        <div class="kpi-label">Scénario défavorable net (P10)
+          <span class="info-icon" data-tip="Valeur nette au 10e percentile : dans 10 % des scénarios simulés, le résultat est inférieur à ce montant. Indicateur de risque de queue — utile pour calibrer la tolérance aux pertes.">ⓘ</span>
+        </div>
         <div class="kpi-value" id="kpiNetPess">–</div>
         <div class="kpi-sub" id="kpiNetPessSub">–</div>
       </div>
@@ -801,17 +949,22 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
 
     <!-- Risque portefeuille -->
     <div class="card" style="margin-bottom:1rem;">
-      <h2>Risque du portefeuille</h2>
+      <h2>Risque du portefeuille
+        <span class="info-icon" data-tip="Volatilité annualisée du portefeuille, calculée à partir des poids et des volatilités individuelles des supports. L'axe va de 0 % (capital garanti) à 60 % (actifs très spéculatifs). Le rendement attendu est la moyenne pondérée des rendements annuels.">ⓘ</span>
+      </h2>
       <div class="gauge-wrap">
         <div class="gauge-bar"><div class="gauge-needle" id="gaugeNeedle"></div></div>
         <div class="gauge-label" id="gaugeLabel">–</div>
       </div>
       <div style="font-size:.8rem;color:var(--muted);margin-top:.6rem;" id="gaugeDetail">–</div>
+      <p class="chart-comment" style="margin-top:.65rem;">La jauge reflète la volatilité annualisée pondérée du portefeuille. Un portefeuille 100 % livrets affiche ~0 %, un portefeuille 100 % ETF actions ~15–17 %, un portefeuille incluant des cryptos peut dépasser 30 %. Plus la volatilité est élevée, plus les scénarios extrêmes (hauts comme bas) sont probables.</p>
     </div>
 
     <!-- Fiscalité par véhicule -->
     <div class="fiscal-section">
-      <h3>Breakdown fiscal par véhicule</h3>
+      <h3>Breakdown fiscal par véhicule
+        <span class="info-icon" style="font-style:normal;" data-tip="Estimations fiscales par enveloppe d'investissement, appliquées sur la plus-value médiane simulée. PEA : PS 17,2 % après 5 ans (flat tax 30 % avant). CTO : flat tax 30 % (PFU) ou TMI + PS si plus avantageux. Livrets : exonérés. Ces calculs sont indicatifs — consultez un conseiller fiscal pour votre situation.">ⓘ</span>
+      </h3>
       <div class="table-wrap">
         <table id="fiscalTable">
           <thead>
@@ -831,18 +984,27 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
     <!-- Charts -->
     <div class="charts-grid">
       <div class="chart-card">
-        <h3>Distribution finale (histogramme)</h3>
+        <h3>Distribution finale des valeurs — 3 000 scénarios
+          <span class="info-icon" data-tip="Histogramme de la valeur du portefeuille à l'échéance sur 3 000 simulations Monte Carlo (Mouvement Brownien Géométrique). Les barres rouges représentent les scénarios en perte de capital ; les barres vertes, les scénarios en gain. La largeur de la distribution reflète la volatilité du portefeuille.">ⓘ</span>
+        </h3>
         <canvas id="histChart" height="180"></canvas>
+        <p class="chart-comment">Chaque barre représente un intervalle de valeurs finales. Plus la distribution est étalée, plus l'incertitude est grande. Un portefeuille garanti (100 % livrets) produit une barre unique. Les barres rouges à gauche indiquent les scénarios de perte.</p>
       </div>
       <div class="chart-card">
-        <h3>Répartition du portefeuille</h3>
+        <h3>Répartition du portefeuille
+          <span class="info-icon" data-tip="Répartition en pourcentage du capital investi par support, selon l'allocation définie à l'étape 2. Permet de visualiser la diversification et la concentration du portefeuille.">ⓘ</span>
+        </h3>
         <canvas id="donutChart" height="180"></canvas>
+        <p class="chart-comment">La répartition influence directement la volatilité et le rendement attendu. Survolez les segments pour voir le nom et le pourcentage de chaque support.</p>
       </div>
     </div>
 
     <div class="chart-full">
-      <h3>Évolution projetée — Trajectoires Monte Carlo (médiane + quantiles)</h3>
+      <h3>Évolution projetée — Fan chart Monte Carlo (médiane + quantiles)
+        <span class="info-icon" data-tip="Trajectoires simulées du portefeuille année par année. La ligne épaisse bleue est la médiane (P50). Les bandes colorées représentent les intervalles de confiance : P25–P75 (bande bleue, 50 % des cas) et P5–P95 (bande dorée, 90 % des cas). Plus les bandes sont larges, plus l'incertitude est grande.">ⓘ</span>
+      </h3>
       <canvas id="fanChart" height="200"></canvas>
+      <p class="chart-comment">Le fan chart montre comment l'incertitude s'amplifie avec le temps. La bande bleue (P25–P75) couvre 50 % des scénarios ; la bande dorée (P5–P95), 90 % des scénarios. À long horizon, même un portefeuille équilibré présente un large éventail d'issues possibles — c'est la nature des marchés financiers.</p>
     </div>
 
     <!-- Tableau détail produits -->
@@ -887,18 +1049,86 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
    ============================================================ */
 
 /* ---- PRODUCTS ---- */
+// Données réglementaires mises à jour au 01/02/2025 :
+// Livret A & LDDS : 2,4 % | LEP : 3,5 % | PEA : PS 17,2 % après 5 ans (flat tax 30 % avant)
+// Plafonds : Livret A 22 950 €, LDDS 12 000 €, LEP 10 000 €, PEA 150 000 €
 const PRODUCTS = [
-  { id:'livret-a',         name:'Livret A',                    vehicle:'Livret', vehicleLabel:'Livret A',      vehicleFiscal:'Livret', icon:'🏦', mu:0.030, sigma:0.000, guaranteed:true,  minHorizon:0, riskProfile:['conservateur','modere','dynamique'], description:'Épargne réglementée garantie à 3%, plafond 22 950 €.' },
-  { id:'ldds',             name:'LDDS',                        vehicle:'Livret', vehicleLabel:'LDDS',           vehicleFiscal:'Livret', icon:'💚', mu:0.030, sigma:0.000, guaranteed:true,  minHorizon:0, riskProfile:['conservateur','modere','dynamique'], description:'Livret Développement Durable et Solidaire, taux identique au Livret A.' },
-  { id:'fonds-euro',       name:'Fonds Euro Assurance-vie',    vehicle:'AV',     vehicleLabel:'Assurance-vie',  vehicleFiscal:'AV',     icon:'🔒', mu:0.025, sigma:0.004, guaranteed:false, minHorizon:3, riskProfile:['conservateur','modere','dynamique'], description:'Capital quasi-garanti, rendement net ~2–2,5 %.' },
-  { id:'obligations-etat', name:"Obligations d'État (ETF)",    vehicle:'CTO',    vehicleLabel:'CTO / AV',       vehicleFiscal:'CTO',    icon:'🏛️', mu:0.038, sigma:0.060, guaranteed:false, minHorizon:2, riskProfile:['conservateur','modere','dynamique'], description:'Obligations souveraines européennes, faible risque.' },
-  { id:'scpi',             name:'SCPI (Immobilier)',            vehicle:'CTO',    vehicleLabel:'CTO / AV',       vehicleFiscal:'CTO',    icon:'🏢', mu:0.045, sigma:0.070, guaranteed:false, minHorizon:8, riskProfile:['conservateur','modere','dynamique'], description:'Société civile de placement immobilier, rendement cible ~4–5 %.' },
-  { id:'uc-oblig',         name:'Unité de Compte Obligataire', vehicle:'AV',     vehicleLabel:'Assurance-vie',  vehicleFiscal:'AV',     icon:'📄', mu:0.040, sigma:0.080, guaranteed:false, minHorizon:3, riskProfile:['conservateur','modere','dynamique'], description:"UC investies en obligations d'entreprises." },
-  { id:'etf-europe',       name:'ETF Actions Europe',          vehicle:'PEA',    vehicleLabel:'PEA',            vehicleFiscal:'PEA',    icon:'🇪🇺', mu:0.070, sigma:0.170, guaranteed:false, minHorizon:5, riskProfile:['conservateur','modere','dynamique'], description:'Indice Euro Stoxx 600.' },
-  { id:'etf-monde',        name:'ETF MSCI World',              vehicle:'PEA',    vehicleLabel:'PEA',            vehicleFiscal:'PEA',    icon:'🌍', mu:0.075, sigma:0.160, guaranteed:false, minHorizon:5, riskProfile:['conservateur','modere','dynamique'], description:'Exposition mondiale ~1 600 sociétés.' },
-  { id:'etf-emergents',    name:'ETF Marchés Émergents',       vehicle:'CTO',    vehicleLabel:'CTO',            vehicleFiscal:'CTO',    icon:'🌏', mu:0.085, sigma:0.220, guaranteed:false, minHorizon:7, riskProfile:['conservateur','modere','dynamique'], description:'Asie, Amérique Latine, Moyen-Orient.' },
-  { id:'uc-actions',       name:'UC Actions Monde (AV)',       vehicle:'AV',     vehicleLabel:'Assurance-vie',  vehicleFiscal:'AV',     icon:'📈', mu:0.070, sigma:0.160, guaranteed:false, minHorizon:5, riskProfile:['conservateur','modere','dynamique'], description:"Unités de compte en actions mondiales au sein d'une assurance-vie." },
-  { id:'crypto-btc',       name:'Cryptomonnaies (panier)',     vehicle:'CTO',    vehicleLabel:'CTO',            vehicleFiscal:'CTO',    icon:'₿',  mu:0.120, sigma:0.600, guaranteed:false, minHorizon:5, riskProfile:['conservateur','modere','dynamique'], description:'BTC/ETH — très haute volatilité, risque de perte totale.' },
+  // ── LIVRETS ──────────────────────────────────────────────────────────
+  { id:'livret-a',
+    name:'Livret A',
+    vehicle:'Livret', vehicleLabel:'Livret A', vehicleFiscal:'Livret',
+    icon:'🏦', mu:0.024, sigma:0.000, guaranteed:true, minHorizon:0,
+    isEtf:false, category:'livret',
+    description:'Taux 2,4 % depuis le 01/02/2025. Plafond 22 950 €. Disponibilité immédiate. Totalement exonéré d\'impôts et prélèvements sociaux.' },
+  { id:'ldds',
+    name:'LDDS',
+    vehicle:'Livret', vehicleLabel:'LDDS', vehicleFiscal:'Livret',
+    icon:'💚', mu:0.024, sigma:0.000, guaranteed:true, minHorizon:0,
+    isEtf:false, category:'livret',
+    description:'Livret Développement Durable et Solidaire. Taux 2,4 % depuis le 01/02/2025. Plafond 12 000 €. Exonéré d\'impôts. Cumulable avec le Livret A.' },
+  { id:'lep',
+    name:'LEP',
+    vehicle:'Livret', vehicleLabel:'LEP', vehicleFiscal:'Livret',
+    icon:'🟢', mu:0.035, sigma:0.000, guaranteed:true, minHorizon:0,
+    isEtf:false, category:'livret',
+    description:'Livret d\'Épargne Populaire. Taux 3,5 % depuis le 01/02/2025. Plafond 10 000 €. Réservé aux foyers sous plafond de revenus (RFR 2023). Exonéré d\'impôts.' },
+  // ── ETF PEA ──────────────────────────────────────────────────────────
+  { id:'etf-world',
+    name:'ETF MSCI World (PEA)',
+    vehicle:'PEA', vehicleLabel:'PEA', vehicleFiscal:'PEA',
+    icon:'🌍', mu:0.075, sigma:0.155, guaranteed:false, minHorizon:5,
+    isEtf:true, category:'etf-pea',
+    description:'~1 600 sociétés mondiales (US 70 %, EU 15 %, Japon 6 %…) via ETF synthétique PEA-éligible. Ex : Amundi MSCI World UCITS ETF (CW8).' },
+  { id:'etf-sp500',
+    name:'ETF S&P 500 (PEA)',
+    vehicle:'PEA', vehicleLabel:'PEA', vehicleFiscal:'PEA',
+    icon:'🇺🇸', mu:0.082, sigma:0.170, guaranteed:false, minHorizon:5,
+    isEtf:true, category:'etf-pea',
+    description:'500 plus grandes capitalisations américaines. ETF synthétique PEA-éligible. Ex : Amundi PEA S&P 500 ESG (PE500), Lyxor PEA S&P 500 (PSP5).' },
+  { id:'etf-nasdaq',
+    name:'ETF Nasdaq 100 (PEA)',
+    vehicle:'PEA', vehicleLabel:'PEA', vehicleFiscal:'PEA',
+    icon:'💻', mu:0.090, sigma:0.220, guaranteed:false, minHorizon:7,
+    isEtf:true, category:'etf-pea',
+    description:'100 plus grandes valeurs technologiques US. ETF synthétique PEA-éligible. Forte concentration tech. Ex : Lyxor Nasdaq 100 UCITS ETF (LQQ).' },
+  { id:'etf-europe',
+    name:'ETF Europe Stoxx 600 (PEA)',
+    vehicle:'PEA', vehicleLabel:'PEA', vehicleFiscal:'PEA',
+    icon:'🇪🇺', mu:0.068, sigma:0.165, guaranteed:false, minHorizon:5,
+    isEtf:true, category:'etf-pea',
+    description:'600 plus grandes sociétés européennes toutes capitalisations. Ex : Amundi STOXX Europe 600 UCITS ETF (C6E), SPDR STOXX Europe 600.' },
+  { id:'etf-smallcap-eu',
+    name:'ETF Small Cap Europe (PEA)',
+    vehicle:'PEA', vehicleLabel:'PEA', vehicleFiscal:'PEA',
+    icon:'📊', mu:0.072, sigma:0.195, guaranteed:false, minHorizon:7,
+    isEtf:true, category:'etf-pea',
+    description:'Petites capitalisations européennes. Prime de risque historiquement supérieure aux larges caps. Ex : SPDR MSCI Europe Small Cap (SMC).' },
+  { id:'etf-dividende',
+    name:'ETF Dividendes Europe (PEA)',
+    vehicle:'PEA', vehicleLabel:'PEA', vehicleFiscal:'PEA',
+    icon:'💰', mu:0.062, sigma:0.145, guaranteed:false, minHorizon:5,
+    isEtf:true, category:'etf-pea',
+    description:'Entreprises européennes à dividendes élevés et stables. Rendement courant ~3–4 %. Ex : Amundi MSCI Europe High Dividend (AEW).' },
+  // ── ETF CTO ──────────────────────────────────────────────────────────
+  { id:'etf-emergents',
+    name:'ETF Marchés Émergents (CTO)',
+    vehicle:'CTO', vehicleLabel:'CTO', vehicleFiscal:'CTO',
+    icon:'🌏', mu:0.082, sigma:0.215, guaranteed:false, minHorizon:7,
+    isEtf:true, category:'etf-cto',
+    description:'Asie (Chine, Inde, Corée), Amérique Latine, Moyen-Orient. Non éligible PEA. Ex : iShares Core MSCI EM IMI UCITS ETF (EIMI).' },
+  { id:'etf-oblig',
+    name:"ETF Obligations d'État (CTO)",
+    vehicle:'CTO', vehicleLabel:'CTO', vehicleFiscal:'CTO',
+    icon:'🏛️', mu:0.036, sigma:0.055, guaranteed:false, minHorizon:2,
+    isEtf:true, category:'etf-cto',
+    description:'Obligations souveraines européennes Investment Grade. Faible volatilité. Ex : Lyxor Euro Government Bond (MTS), iShares Core € Govt Bond (IEGA).' },
+  // ── DIVERS ───────────────────────────────────────────────────────────
+  { id:'crypto-btc',
+    name:'Crypto (panier BTC/ETH)',
+    vehicle:'CTO', vehicleLabel:'CTO', vehicleFiscal:'CTO',
+    icon:'₿', mu:0.120, sigma:0.600, guaranteed:false, minHorizon:5,
+    isEtf:false, category:'crypto',
+    description:'Panier BTC/ETH. Très haute volatilité, risque de perte totale. Fiscalité flat tax 30 % (MBV — actifs numériques). Hors PEA.' },
 ];
 
 /* ---- STATE ---- */
@@ -912,6 +1142,8 @@ let state = {
 
 let charts = {};
 let simResults = null;
+// ETFs enabled in the selector — null = not yet initialized (select all by default)
+let activeEtfs = null;
 
 /* ---- STEP NAVIGATION ---- */
 function goStep(n) {
@@ -960,6 +1192,74 @@ document.querySelectorAll('input[name="risk"]').forEach(r => {
   r.addEventListener('change', function() { state.risk = this.value; });
 });
 
+/* ---- ETF SELECTOR ---- */
+let etfSelectorOpen = true;
+
+function toggleEtfSelector() {
+  etfSelectorOpen = !etfSelectorOpen;
+  document.getElementById('etfSelectorBody').style.display = etfSelectorOpen ? '' : 'none';
+  document.getElementById('etfToggleBtn').textContent = etfSelectorOpen ? '▲ Réduire' : '▼ Développer';
+}
+
+function buildEtfSelector() {
+  const body = document.getElementById('etfSelectorBody');
+  body.innerHTML = '';
+
+  // Initialize activeEtfs on first call: enable all ETFs + non-ETF products
+  if (activeEtfs === null) {
+    activeEtfs = new Set(PRODUCTS.map(p => p.id));
+  }
+
+  const groups = [
+    { key:'livret',  label:'Livrets réglementés', tag:'tag-livret' },
+    { key:'etf-pea', label:'ETF — PEA (éligibles)',  tag:'tag-pea' },
+    { key:'etf-cto', label:'ETF — CTO',              tag:'tag-cto' },
+    { key:'crypto',  label:'Divers',                  tag:'tag-cto' },
+  ];
+
+  groups.forEach(g => {
+    const prods = PRODUCTS.filter(p => p.category === g.key);
+    if (!prods.length) return;
+
+    const gl = document.createElement('div');
+    gl.className = 'etf-group-label';
+    gl.textContent = g.label;
+    body.appendChild(gl);
+
+    const checks = document.createElement('div');
+    checks.className = 'etf-checks';
+
+    prods.forEach(p => {
+      const item = document.createElement('label');
+      item.className = 'etf-check-item' + (activeEtfs.has(p.id) ? ' checked' : '');
+      item.title = p.description;
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = activeEtfs.has(p.id);
+      cb.addEventListener('change', function() {
+        if (this.checked) { activeEtfs.add(p.id); item.classList.add('checked'); }
+        else               { activeEtfs.delete(p.id); item.classList.remove('checked'); state.alloc[p.id] = 0; }
+        rebuildAllocList();
+      });
+
+      item.appendChild(cb);
+      item.appendChild(document.createTextNode(p.icon + ' ' + p.name));
+      checks.appendChild(item);
+    });
+    body.appendChild(checks);
+  });
+
+  const hint = document.createElement('p');
+  hint.className = 'etf-hint';
+  hint.textContent = 'Cliquez sur un support pour l\'inclure ou l\'exclure. Survolez pour afficher la description.';
+  body.appendChild(hint);
+}
+
+function getVisibleProducts() {
+  return PRODUCTS.filter(p => activeEtfs !== null ? activeEtfs.has(p.id) : true);
+}
+
 /* ---- BUILD ALLOCATION UI ---- */
 function buildAllocUI() {
   state.capital = parseFloat(document.getElementById('capital').value)||10000;
@@ -967,20 +1267,26 @@ function buildAllocUI() {
   state.tmi     = parseInt(document.getElementById('tmiSelect').value)||30;
   state.risk    = document.querySelector('input[name="risk"]:checked').value;
 
+  buildEtfSelector();
+  rebuildAllocList();
+}
+
+function rebuildAllocList() {
   const list = document.getElementById('allocList');
   list.innerHTML = '';
 
-  PRODUCTS.forEach(p => {
+  getVisibleProducts().forEach(p => {
     const val = state.alloc[p.id] || 0;
 
     const row = document.createElement('div');
     row.className = 'alloc-row' + (val > 0 ? ' has-alloc' : '');
     row.id = 'row-' + p.id;
 
+    const descTip = p.description.replace(/'/g, '&#39;');
     row.innerHTML = `
       <div class="alloc-icon">${p.icon}</div>
       <div class="alloc-meta">
-        <div class="alloc-name">${p.name}</div>
+        <div class="alloc-name">${p.name} <abbr title="${descTip}" style="font-weight:400;font-size:.75rem;color:var(--muted);cursor:help;">ⓘ</abbr></div>
         <div class="alloc-vehicle">${vehicleTag(p.vehicleFiscal)} · Rdt: ${(p.mu*100).toFixed(1)}% · Vol: ${(p.sigma*100).toFixed(0)}%</div>
       </div>
       <div class="alloc-slider-wrap">
@@ -1014,7 +1320,12 @@ function buildAllocUI() {
 }
 
 function vehicleTag(v) {
-  const map = { Livret:'<span class="tag tag-livret">Livret</span>', PEA:'<span class="tag tag-pea">PEA</span>', AV:'<span class="tag tag-av">AV</span>', CTO:'<span class="tag tag-cto">CTO</span>' };
+  const map = {
+    Livret: '<span class="tag tag-livret">Livret</span>',
+    PEA:    '<span class="tag tag-pea">PEA</span>',
+    AV:     '<span class="tag tag-av">AV</span>',
+    CTO:    '<span class="tag tag-cto">CTO</span>',
+  };
   return map[v] || v;
 }
 
@@ -1038,8 +1349,8 @@ function getAllocTotal() {
 }
 
 function applySuggestion() {
-  // All products accessible; filter only by horizon compatibility
-  const eligible = PRODUCTS.filter(p => p.minHorizon <= state.horizon);
+  // Only suggest from visible (selected) products, compatible with horizon
+  const eligible = getVisibleProducts().filter(p => p.minHorizon <= state.horizon);
   PRODUCTS.forEach(p => { state.alloc[p.id] = 0; });
 
   if (eligible.length === 0) return;
@@ -1070,7 +1381,7 @@ function applySuggestion() {
 
 function resetAlloc() {
   PRODUCTS.forEach(p => { state.alloc[p.id] = 0; });
-  buildAllocUI();
+  rebuildAllocList();
 }
 
 /* ---- MONTE CARLO SIMULATION ---- */
@@ -1270,18 +1581,18 @@ function renderResults() {
   const lossProb = finalVals.filter(v => v < cap).length / finalVals.length;
 
   document.getElementById('kpiLoss').textContent = (lossProb*100).toFixed(1) + ' %';
-  document.getElementById('kpiLoss').className = 'kpi-value ' + (lossProb > 0.2 ? 'negative' : lossProb > 0.05 ? 'warning' : 'positive');
-  document.getElementById('kpiLossSub').textContent = 'Probabilité de moins-value · P5 = ' + fmt(p5);
+  document.getElementById('kpiLoss').className = 'kpi-value ' + (lossProb > 0.2 ? 'negative' : lossProb > 0.05 ? 'gold' : 'positive');
+  document.getElementById('kpiLossSub').textContent = 'Probabilité de moins-value à l\'échéance · P5 = ' + fmt(p5);
 
   document.getElementById('kpiMed').textContent = fmt(p50);
-  document.getElementById('kpiMedSub').textContent = fmtPct((p50-cap)/cap) + ' · Gain brut médian sur ' + T + ' ans';
+  document.getElementById('kpiMedSub').textContent = fmtPct((p50-cap)/cap) + ' gain brut · médiane sur ' + T + ' ans (avant impôts)';
 
   document.getElementById('kpiNetMed').textContent = fmt(netMed);
   document.getElementById('kpiNetMedSub').textContent = 'Après impôts · Fiscalité: ' + fmt(totalTax);
 
   document.getElementById('kpiNetPess').textContent = fmt(netPess);
-  document.getElementById('kpiNetPess').className = 'kpi-value ' + (netPess < cap ? 'negative' : '');
-  document.getElementById('kpiNetPessSub').textContent = 'P10 net · ' + fmtPct((netPess-cap)/cap);
+  document.getElementById('kpiNetPess').className = 'kpi-value ' + (netPess < cap ? 'negative' : 'positive');
+  document.getElementById('kpiNetPessSub').textContent = 'P10 net · ' + fmtPct((netPess-cap)/cap) + ' · 10 % des scénarios sont en dessous';
 
   /* Net highlight */
   document.getElementById('netHighlightValue').textContent = fmt(netMed);
