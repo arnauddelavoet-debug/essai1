@@ -867,7 +867,7 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
 
       <div class="nav-row">
         <span></span>
-        <button class="btn btn-primary" onclick="goStep(2)">Définir l'allocation →</button>
+        <button class="btn btn-primary" onclick="goStep(2, true)">Définir l'allocation →</button>
       </div>
     </div>
   </div>
@@ -1152,7 +1152,8 @@ let state = {
   horizon: 10,
   tmi: 30,
   risk: 'modere',
-  alloc: {},  // productId -> %
+  alloc: {},          // productId -> %
+  suggestionActive: false, // true si l'allocation actuelle vient de applySuggestion
 };
 
 let charts = {};
@@ -1195,7 +1196,9 @@ const PROFILE_DEF = {
 };
 
 /* ---- STEP NAVIGATION ---- */
-function goStep(n) {
+// fromProfile=true : vient de l'étape 1 → recalcule la suggestion
+// fromProfile=false (défaut) : vient de l'étape 3 → conserve l'allocation manuelle
+function goStep(n, fromProfile) {
   [1,2,3].forEach(i => {
     document.getElementById('panel'+i).classList.toggle('active', i===n);
     const el = document.getElementById('st'+i);
@@ -1213,9 +1216,8 @@ function goStep(n) {
 
   if (n === 2) {
     buildAllocUI();
-    // Auto-apply suggestion on first visit (when no allocation is set yet)
-    // buildAllocUI must run first so DOM sliders exist before applySuggestion tries to update them
-    if (getAllocTotal() === 0) applySuggestion();
+    // Appliquer la suggestion si : (a) arrivée depuis étape 1, (b) ou allocation vide
+    if (fromProfile || getAllocTotal() === 0) applySuggestion();
   }
   if (n === 3) renderResults();
 }
@@ -1290,6 +1292,8 @@ function buildEtfSelector() {
         if (this.checked) { activeEtfs.add(p.id); item.classList.add('checked'); }
         else               { activeEtfs.delete(p.id); item.classList.remove('checked'); state.alloc[p.id] = 0; }
         rebuildAllocList();
+        // Si la suggestion est active, la recalculer avec les supports mis à jour
+        if (state.suggestionActive) applySuggestion();
       });
 
       item.appendChild(cb);
@@ -1318,6 +1322,7 @@ function buildAllocUI() {
 
   buildEtfSelector();
   rebuildAllocList();
+  updateSuggestBtn();
 }
 
 function rebuildAllocList() {
@@ -1354,6 +1359,7 @@ function rebuildAllocList() {
     slider.addEventListener('input', function() {
       numIn.value = this.value;
       state.alloc[p.id] = parseInt(this.value)||0;
+      state.suggestionActive = false;
       updateAllocUI(p.id);
     });
     numIn.addEventListener('input', function() {
@@ -1361,6 +1367,7 @@ function rebuildAllocList() {
       this.value = v;
       slider.value = v;
       state.alloc[p.id] = v;
+      state.suggestionActive = false;
       updateAllocUI(p.id);
     });
   });
@@ -1398,39 +1405,125 @@ function getAllocTotal() {
 }
 
 function applySuggestion() {
-  // Only suggest from visible (selected) products, compatible with horizon
-  const eligible = getVisibleProducts().filter(p => p.minHorizon <= state.horizon);
+  const T    = state.horizon;
+  const risk = state.risk;
+
   PRODUCTS.forEach(p => { state.alloc[p.id] = 0; });
 
-  if (eligible.length === 0) return;
+  // Éligibles : sélectionnés dans le sélecteur ET compatibles avec l'horizon
+  const eligible = getVisibleProducts().filter(p => p.minHorizon <= T);
+  if (eligible.length === 0) { updateSuggestBtn(); updateTotalBadge(); return; }
 
-  // Risk-profile weights: conservateur favors low sigma, dynamique favors high mu
-  const riskWeight = { conservateur: p => 1 / (p.sigma + 0.01), modere: p => p.mu / (p.sigma + 0.01), dynamique: p => p.mu };
-  const wFn = riskWeight[state.risk] || (p => p.mu);
-  const totalW = eligible.reduce((s,p) => s + wFn(p), 0);
-  let remaining = 100;
-  eligible.forEach((p, i) => {
-    const pct = i === eligible.length-1 ? remaining : Math.round(wFn(p) / totalW * 100);
-    state.alloc[p.id] = Math.max(0, pct);
-    remaining -= pct;
-  });
+  // Catégoriser par niveau de risque
+  const safe   = eligible.filter(p => p.sigma === 0);                         // Livrets garantis
+  const bonds  = eligible.filter(p => p.sigma > 0    && p.sigma < 0.10);      // Obligations (~σ<10%)
+  const equity = eligible.filter(p => p.sigma >= 0.10 && p.sigma < 0.40);     // ETF actions
+  const alts   = eligible.filter(p => p.sigma >= 0.40);                        // Crypto / haute vol.
 
-  // Re-render sliders
+  // ── Cibles par catégorie selon profil × horizon ─────────────────────────
+  // ePct : actions | bPct : obligations | aPct : alts | sPct : sécurisé
+  let ePct, bPct, aPct, sPct;
+
+  if (risk === 'conservateur') {
+    // Court terme : livrets dominants ; long terme : un peu d'actions
+    ePct = Math.min(10 + T * 2, 35);
+    bPct = bonds.length  ? Math.min(10 + T, 30) : 0;
+    aPct = 0;
+    sPct = 100 - ePct - bPct;
+
+  } else if (risk === 'modere') {
+    // Équilibre : actions majoritaires à long terme, obligations tampon
+    ePct = Math.min(20 + T * 3, 70);
+    bPct = bonds.length  ? Math.max(5, 30 - T * 2) : 0;
+    aPct = 0;
+    sPct = 100 - ePct - bPct;
+
+  } else { // dynamique
+    // Croissance max : actions + alt sur horizon long, livrets réduits
+    aPct = alts.length && T >= 5 ? Math.min((T - 4) * 2, 15) : 0;
+    ePct = Math.min(35 + T * 3, 85);
+    bPct = bonds.length && T <= 5 ? Math.max(5, 20 - T * 3) : 0;
+    sPct = 100 - ePct - aPct - bPct;
+  }
+
+  sPct = Math.max(sPct, 0);
+
+  // Redistribuer les catégories vides vers actions (ou sécurisé si actions vide)
+  if (!safe.length)   { ePct += sPct;   sPct = 0; }
+  if (!bonds.length)  { ePct += bPct;   bPct = 0; }
+  if (!alts.length)   { ePct += aPct;   aPct = 0; }
+  if (!equity.length) { sPct += ePct;   ePct = 0; }
+  sPct = Math.max(sPct, 0);
+
+  // Normaliser à 100 (gestion des arrondis)
+  const rawTotal = ePct + bPct + aPct + sPct;
+  if (rawTotal <= 0) { updateSuggestBtn(); updateTotalBadge(); return; }
+  const sc = 100 / rawTotal;
+  ePct = Math.round(ePct * sc);
+  bPct = Math.round(bPct * sc);
+  aPct = Math.round(aPct * sc);
+  sPct = 100 - ePct - bPct - aPct;
+
+  // ── Distribuer au sein de chaque catégorie ───────────────────────────────
+  function distribute(products, budget, wFn) {
+    if (!products.length || budget <= 0) return;
+    const tw = products.reduce((s, p) => s + wFn(p), 0);
+    let rem = budget;
+    products.forEach((p, i) => {
+      const v = i === products.length - 1
+        ? Math.max(0, rem)
+        : Math.max(0, Math.round(wFn(p) / tw * budget));
+      state.alloc[p.id] = v;
+      rem -= v;
+    });
+  }
+
+  // Poids par catégorie
+  const equityWFn = risk === 'conservateur' ? p => 1 / (p.sigma + 0.01)
+                  : risk === 'modere'        ? p => p.mu / (p.sigma + 0.01)
+                  :                            p => p.mu;
+
+  distribute(safe,   sPct, () => 1);
+  distribute(bonds,  bPct, p => p.mu / (p.sigma + 0.001));
+  distribute(equity, ePct, equityWFn);
+  distribute(alts,   aPct, p => p.mu);
+
+  // Ajustement final pour forcer le total = 100 (résidu d'arrondi)
+  const tot = Object.values(state.alloc).reduce((s, v) => s + (v || 0), 0);
+  if (tot !== 100 && eligible.length) {
+    const top = eligible.reduce((mx, p) =>
+      (state.alloc[p.id] || 0) > (state.alloc[mx.id] || 0) ? p : mx, eligible[0]);
+    state.alloc[top.id] = Math.max(0, (state.alloc[top.id] || 0) + (100 - tot));
+  }
+
+  state.suggestionActive = true;
+
+  // Rafraîchir les sliders
   PRODUCTS.forEach(p => {
-    const slider = document.getElementById('slider-'+p.id);
-    const numIn  = document.getElementById('num-'+p.id);
+    const slider = document.getElementById('slider-' + p.id);
+    const numIn  = document.getElementById('num-' + p.id);
     if (slider && numIn) {
-      slider.value = state.alloc[p.id]||0;
-      numIn.value  = state.alloc[p.id]||0;
+      slider.value = state.alloc[p.id] || 0;
+      numIn.value  = state.alloc[p.id] || 0;
       updateAllocUI(p.id);
     }
   });
+  updateSuggestBtn();
   updateTotalBadge();
+}
+
+function updateSuggestBtn() {
+  const btn = document.getElementById('btnSuggest');
+  if (!btn) return;
+  const rLbl = { conservateur: 'Conservateur', modere: 'Modéré', dynamique: 'Dynamique' };
+  btn.textContent = 'Suggestion ' + (rLbl[state.risk] || '') + ' · ' + state.horizon + ' ans';
 }
 
 function resetAlloc() {
   PRODUCTS.forEach(p => { state.alloc[p.id] = 0; });
+  state.suggestionActive = false;
   rebuildAllocList();
+  updateSuggestBtn();
 }
 
 /* ---- MONTE CARLO SIMULATION ---- */
@@ -2088,26 +2181,28 @@ function generatePDF() {
       }
 
       doc.setFillColor(...boxFill);
-      doc.rect(LM, y, PW, 16, 'F');
+      doc.rect(LM, y, PW, 20, 'F');
       doc.setFillColor(...borderColor);
-      doc.rect(LM, y, 2, 16, 'F');
+      doc.rect(LM, y, 2, 20, 'F');
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...borderColor);
-      doc.text(matchStatus, LM + 5, y + 6);
+      const statusLines = doc.splitTextToSize(matchStatus, PW - 8);
+      doc.text(statusLines, LM + 5, y + 6);
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(60, 60, 60);
       const sigMaxStr = sigmaMax >= 1 ? 'sans limite' : (sigmaMax * 100).toFixed(0) + '%';
-      doc.text(
-        'Volatilite actuelle : ' + (portSigma * 100).toFixed(1) + '%  |  Plage attendue profil ' + pDef.label + ' : ' + (sigmaMin * 100).toFixed(0) + '% - ' + sigMaxStr + '  |  Rendement attendu : ' + (portMu * 100).toFixed(2) + '%/an',
-        LM + 5, y + 13
+      const metricsLine = doc.splitTextToSize(
+        'Vol. actuelle : ' + (portSigma * 100).toFixed(1) + '%  |  Plage profil ' + pDef.label + ' : ' + (sigmaMin * 100).toFixed(0) + '% - ' + sigMaxStr + '  |  Rdt attendu : ' + (portMu * 100).toFixed(2) + '%/an',
+        PW - 8
       );
-      y += 20;
+      doc.text(metricsLine, LM + 5, y + 10);
+      y += 10 + metricsLine.length * 4 + 4;
 
       doc.autoTable({
         startY: y,
-        head: [['Allocation typique — Profil ' + pDef.label + ' ' + pDef.icon + '  |  Cible : ' + pDef.sigmaDesc, 'Pond. indicative', 'Caracteristiques']],
+        head: [['Allocation typique — Profil ' + pDef.label + '  |  Cible : ' + pDef.sigmaDesc, 'Pond. indicative', 'Caracteristiques']],
         body: pDef.typical,
         margin: { left: LM },
         tableWidth: PW,
@@ -2121,45 +2216,83 @@ function generatePDF() {
       doc.setFontSize(7.5);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(...MUTED);
-      doc.text('* Ces pondérations sont indicatives. Toute combinatoire peut être saisie librement — ce tableau sert uniquement de référence de profil.', LM, y);
-      y += 8;
+      {
+        const noteLines = doc.splitTextToSize(
+          '* Ponderations indicatives. Toute combinatoire peut etre saisie librement — ce tableau sert de reference de profil.',
+          PW
+        );
+        doc.text(noteLines, LM, y);
+        y += noteLines.length * 3.8 + 5;
+      }
     }
   }
 
-  /* ── 4 — GRAPHIQUES ── */
-  if (y > 185) { doc.addPage(); y = 20; }
+  /* ── 4 — GRAPHIQUES — page dédiée ── */
+  doc.addPage();
+  y = 20;
   sectionTitle('4. Graphiques de simulation', y);
-  y += 7;
+  y += 8;
 
   try {
     const histCv  = document.getElementById('histChart');
     const donutCv = document.getElementById('donutChart');
     const fanCv   = document.getElementById('fanChart');
 
-    if (histCv && donutCv) {
-      const histImg  = histCv.toDataURL('image/png', 0.9);
-      const donutImg = donutCv.toDataURL('image/png', 0.9);
+    const PAGE_H  = doc.internal.pageSize.getHeight(); // 297 mm
+    const MARGIN_B = 15; // bottom margin
 
-      // Deux graphiques côte à côte
-      doc.addImage(histImg,  'PNG', LM,      y, 86, 57);
-      doc.addImage(donutImg, 'PNG', LM + 93, y, 86, 57);
-      doc.setFontSize(7);
+    if (histCv && donutCv) {
+      // Largeur de chaque graphique côte à côte (avec espace entre)
+      const cW = 86;
+      const gap = 8;
+
+      // Hauteur calculée depuis le ratio CSS (offsetWidth/Height) pour éviter distorsion
+      const hNatW = histCv.offsetWidth  || histCv.width  || 1;
+      const hNatH = histCv.offsetHeight || histCv.height || 1;
+      const dNatW = donutCv.offsetWidth  || donutCv.width  || 1;
+      const dNatH = donutCv.offsetHeight || donutCv.height || 1;
+      const histH  = Math.min(Math.round(cW * hNatH / hNatW), 80);
+      const donutH = Math.min(Math.round(cW * dNatH / dNatW), 80);
+      const rowH   = Math.max(histH, donutH);
+
+      // Vérifier l'espace disponible
+      if (y + rowH + 12 > PAGE_H - MARGIN_B) { doc.addPage(); y = 20; }
+
+      const histImg  = histCv.toDataURL('image/png', 0.95);
+      const donutImg = donutCv.toDataURL('image/png', 0.95);
+
+      doc.addImage(histImg,  'PNG', LM,            y, cW, histH);
+      doc.addImage(donutImg, 'PNG', LM + cW + gap, y, cW, donutH);
+
+      doc.setFontSize(6.5);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(...MUTED);
-      doc.text('Distribution des 3 000 valeurs finales (barres rouges = perte de capital)', LM, y + 60);
-      doc.text('Repartition du portefeuille par support (%)', LM + 93, y + 60);
-      y += 66;
+      doc.text('Distribution des 3 000 valeurs finales', LM, y + rowH + 4);
+      doc.text('(barres rouges = perte de capital, vertes = gain)', LM, y + rowH + 8);
+      doc.text('Repartition par support (%)', LM + cW + gap, y + rowH + 4);
+      y += rowH + 14;
     }
 
     if (fanCv) {
-      if (y > 195) { doc.addPage(); y = 20; }
-      const fanImg = fanCv.toDataURL('image/png', 0.9);
-      doc.addImage(fanImg, 'PNG', LM, y, PW, 78);
-      doc.setFontSize(7);
+      // Fan chart pleine largeur sur une nouvelle ligne
+      const fNatW = fanCv.offsetWidth  || fanCv.width  || 1;
+      const fNatH = fanCv.offsetHeight || fanCv.height || 1;
+      const fanH  = Math.min(Math.round(PW * fNatH / fNatW), 90);
+
+      if (y + fanH + 12 > PAGE_H - MARGIN_B) { doc.addPage(); y = 20; }
+
+      const fanImg = fanCv.toDataURL('image/png', 0.95);
+      doc.addImage(fanImg, 'PNG', LM, y, PW, fanH);
+
+      doc.setFontSize(6.5);
       doc.setFont('helvetica', 'italic');
       doc.setTextColor(...MUTED);
-      doc.text('Fan chart : median P50 (ligne bleue), bande P25-P75 (50% des scenar.), bande P5-P95 (90% des scenar.)', LM, y + 81);
-      y += 88;
+      const fanCaption = doc.splitTextToSize(
+        'Fan chart : ligne P50 (médiane), bande bleue P25-P75 (50% des scénarios), bande or P5-P95 (90% des scénarios). Plus les bandes sont larges, plus l\'incertitude augmente avec l\'horizon.',
+        PW
+      );
+      doc.text(fanCaption, LM, y + fanH + 4);
+      y += fanH + 4 + fanCaption.length * 3.5 + 4;
     }
   } catch (chartErr) {
     doc.setFontSize(8.5);
@@ -2174,12 +2307,18 @@ function generatePDF() {
 
   /* 5 — BREAKDOWN FISCAL */
   sectionTitle('5. Breakdown fiscal par véhicule d\'investissement', y);
-  y += 4;
+  y += 5;
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'italic');
   doc.setTextColor(...MUTED);
-  doc.text('PS = Prélèvements Sociaux 17,2% (CSG 9,2% + CRDS 0,5% + Prélèvement de solidarité 7,5%) — calculés sur la plus-value médiane simulée.', LM, y + 3);
-  y += 8;
+  {
+    const psLines = doc.splitTextToSize(
+      'PS = Prelev. Sociaux 17,2% (CSG 9,2% + CRDS 0,5% + Prel. solidarite 7,5%) — calcules sur la plus-value mediane simulee.',
+      PW
+    );
+    doc.text(psLines, LM, y);
+    y += psLines.length * 3.8 + 4;
+  }
 
   const fiscalRows = [];
   ['Livret', 'PEA', 'AV', 'CTO'].forEach(v => {
