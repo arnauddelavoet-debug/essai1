@@ -902,17 +902,17 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
 
 /* ---- PRODUCTS ---- */
 const PRODUCTS = [
-  { id:'livret-a',       name:'Livret A',                    vehicle:'Livret', vehicleLabel:'Livret A',        vehicleFiscal:'Livret', icon:'🏦', mu:0.030, sigma:0.000, guaranteed:true,  minHorizon:0, riskProfile:['conservateur','modere','dynamique'], description:'Épargne réglementée garantie à 3%, plafond 22 950 €.' },
-  { id:'ldds',           name:'LDDS',                        vehicle:'Livret', vehicleLabel:'LDDS',             vehicleFiscal:'Livret', icon:'💚', mu:0.030, sigma:0.000, guaranteed:true,  minHorizon:0, riskProfile:['conservateur','modere','dynamique'], description:'Livret Développement Durable et Solidaire, taux identique au Livret A.' },
-  { id:'fonds-euro',     name:'Fonds Euro Assurance-vie',    vehicle:'AV',     vehicleLabel:'Assurance-vie',    vehicleFiscal:'AV',     icon:'🔒', mu:0.025, sigma:0.004, guaranteed:false, minHorizon:3, riskProfile:['conservateur','modere'],              description:'Capital quasi-garanti, rendement net ~2–2,5 %.' },
-  { id:'obligations-etat', name:"Obligations d'État (ETF)", vehicle:'CTO',    vehicleLabel:'CTO / AV',         vehicleFiscal:'CTO',    icon:'🏛️', mu:0.038, sigma:0.060, guaranteed:false, minHorizon:2, riskProfile:['conservateur','modere'],              description:'Obligations souveraines européennes, faible risque.' },
-  { id:'scpi',           name:'SCPI (Immobilier)',           vehicle:'CTO',    vehicleLabel:'CTO / AV',         vehicleFiscal:'CTO',    icon:'🏢', mu:0.045, sigma:0.070, guaranteed:false, minHorizon:8, riskProfile:['conservateur','modere','dynamique'], description:'Société civile de placement immobilier, rendement cible ~4–5 %.' },
-  { id:'uc-oblig',       name:'Unité de Compte Obligataire', vehicle:'AV',    vehicleLabel:'Assurance-vie',    vehicleFiscal:'AV',     icon:'📄', mu:0.040, sigma:0.080, guaranteed:false, minHorizon:3, riskProfile:['conservateur','modere'],              description:"UC investies en obligations d'entreprises." },
-  { id:'etf-europe',     name:'ETF Actions Europe',          vehicle:'PEA',    vehicleLabel:'PEA',              vehicleFiscal:'PEA',    icon:'🇪🇺', mu:0.070, sigma:0.170, guaranteed:false, minHorizon:5, riskProfile:['modere','dynamique'],              description:'Indice Euro Stoxx 600.' },
-  { id:'etf-monde',      name:'ETF MSCI World',              vehicle:'PEA',    vehicleLabel:'PEA',              vehicleFiscal:'PEA',    icon:'🌍', mu:0.075, sigma:0.160, guaranteed:false, minHorizon:5, riskProfile:['modere','dynamique'],              description:'Exposition mondiale ~1 600 sociétés.' },
-  { id:'etf-emergents',  name:'ETF Marchés Émergents',       vehicle:'CTO',    vehicleLabel:'CTO',              vehicleFiscal:'CTO',    icon:'🌏', mu:0.085, sigma:0.220, guaranteed:false, minHorizon:7, riskProfile:['dynamique'],                     description:'Asie, Amérique Latine, Moyen-Orient.' },
-  { id:'uc-actions',     name:'UC Actions Monde (AV)',       vehicle:'AV',     vehicleLabel:'Assurance-vie',    vehicleFiscal:'AV',     icon:'📈', mu:0.070, sigma:0.160, guaranteed:false, minHorizon:5, riskProfile:['modere','dynamique'],              description:"Unités de compte en actions mondiales au sein d'une assurance-vie." },
-  { id:'crypto-btc',     name:'Cryptomonnaies (panier)',     vehicle:'CTO',    vehicleLabel:'CTO',              vehicleFiscal:'CTO',    icon:'₿',  mu:0.120, sigma:0.600, guaranteed:false, minHorizon:5, riskProfile:['dynamique'],                     description:'BTC/ETH — très haute volatilité, risque de perte totale.' },
+  { id:'livret-a',         name:'Livret A',                    vehicle:'Livret', vehicleLabel:'Livret A',      vehicleFiscal:'Livret', icon:'🏦', mu:0.030, sigma:0.000, guaranteed:true,  minHorizon:0, riskProfile:['conservateur','modere','dynamique'], description:'Épargne réglementée garantie à 3%, plafond 22 950 €.' },
+  { id:'ldds',             name:'LDDS',                        vehicle:'Livret', vehicleLabel:'LDDS',           vehicleFiscal:'Livret', icon:'💚', mu:0.030, sigma:0.000, guaranteed:true,  minHorizon:0, riskProfile:['conservateur','modere','dynamique'], description:'Livret Développement Durable et Solidaire, taux identique au Livret A.' },
+  { id:'fonds-euro',       name:'Fonds Euro Assurance-vie',    vehicle:'AV',     vehicleLabel:'Assurance-vie',  vehicleFiscal:'AV',     icon:'🔒', mu:0.025, sigma:0.004, guaranteed:false, minHorizon:3, riskProfile:['conservateur','modere','dynamique'], description:'Capital quasi-garanti, rendement net ~2–2,5 %.' },
+  { id:'obligations-etat', name:"Obligations d'État (ETF)",    vehicle:'CTO',    vehicleLabel:'CTO / AV',       vehicleFiscal:'CTO',    icon:'🏛️', mu:0.038, sigma:0.060, guaranteed:false, minHorizon:2, riskProfile:['conservateur','modere','dynamique'], description:'Obligations souveraines européennes, faible risque.' },
+  { id:'scpi',             name:'SCPI (Immobilier)',            vehicle:'CTO',    vehicleLabel:'CTO / AV',       vehicleFiscal:'CTO',    icon:'🏢', mu:0.045, sigma:0.070, guaranteed:false, minHorizon:8, riskProfile:['conservateur','modere','dynamique'], description:'Société civile de placement immobilier, rendement cible ~4–5 %.' },
+  { id:'uc-oblig',         name:'Unité de Compte Obligataire', vehicle:'AV',     vehicleLabel:'Assurance-vie',  vehicleFiscal:'AV',     icon:'📄', mu:0.040, sigma:0.080, guaranteed:false, minHorizon:3, riskProfile:['conservateur','modere','dynamique'], description:"UC investies en obligations d'entreprises." },
+  { id:'etf-europe',       name:'ETF Actions Europe',          vehicle:'PEA',    vehicleLabel:'PEA',            vehicleFiscal:'PEA',    icon:'🇪🇺', mu:0.070, sigma:0.170, guaranteed:false, minHorizon:5, riskProfile:['conservateur','modere','dynamique'], description:'Indice Euro Stoxx 600.' },
+  { id:'etf-monde',        name:'ETF MSCI World',              vehicle:'PEA',    vehicleLabel:'PEA',            vehicleFiscal:'PEA',    icon:'🌍', mu:0.075, sigma:0.160, guaranteed:false, minHorizon:5, riskProfile:['conservateur','modere','dynamique'], description:'Exposition mondiale ~1 600 sociétés.' },
+  { id:'etf-emergents',    name:'ETF Marchés Émergents',       vehicle:'CTO',    vehicleLabel:'CTO',            vehicleFiscal:'CTO',    icon:'🌏', mu:0.085, sigma:0.220, guaranteed:false, minHorizon:7, riskProfile:['conservateur','modere','dynamique'], description:'Asie, Amérique Latine, Moyen-Orient.' },
+  { id:'uc-actions',       name:'UC Actions Monde (AV)',       vehicle:'AV',     vehicleLabel:'Assurance-vie',  vehicleFiscal:'AV',     icon:'📈', mu:0.070, sigma:0.160, guaranteed:false, minHorizon:5, riskProfile:['conservateur','modere','dynamique'], description:"Unités de compte en actions mondiales au sein d'une assurance-vie." },
+  { id:'crypto-btc',       name:'Cryptomonnaies (panier)',     vehicle:'CTO',    vehicleLabel:'CTO',            vehicleFiscal:'CTO',    icon:'₿',  mu:0.120, sigma:0.600, guaranteed:false, minHorizon:5, riskProfile:['conservateur','modere','dynamique'], description:'BTC/ETH — très haute volatilité, risque de perte totale.' },
 ];
 
 /* ---- STATE ---- */
@@ -984,17 +984,18 @@ function buildAllocUI() {
   list.innerHTML = '';
 
   PRODUCTS.forEach(p => {
-    const inProfile = p.riskProfile.includes(state.risk) && p.minHorizon <= state.horizon;
+    const horizonOk = p.minHorizon <= state.horizon;
     const val = state.alloc[p.id] || 0;
 
     const row = document.createElement('div');
-    row.className = 'alloc-row' + (inProfile ? '' : ' off-profile') + (val > 0 ? ' has-alloc' : '');
+    row.className = 'alloc-row' + (!horizonOk ? ' off-profile' : '') + (val > 0 ? ' has-alloc' : '');
     row.id = 'row-' + p.id;
 
+    const horizonTag = !horizonOk ? `<span class="horizon-tag">horizon min ${p.minHorizon} ans</span>` : '';
     row.innerHTML = `
       <div class="alloc-icon">${p.icon}</div>
       <div class="alloc-meta">
-        <div class="alloc-name">${p.name}${!inProfile ? '<span class="horizon-tag">hors profil</span>' : ''}</div>
+        <div class="alloc-name">${p.name}${horizonTag}</div>
         <div class="alloc-vehicle">${vehicleTag(p.vehicleFiscal)} · Rdt: ${(p.mu*100).toFixed(1)}% · Vol: ${(p.sigma*100).toFixed(0)}%</div>
       </div>
       <div class="alloc-slider-wrap">
@@ -1052,17 +1053,20 @@ function getAllocTotal() {
 }
 
 function applySuggestion() {
-  const eligible = PRODUCTS.filter(p => p.riskProfile.includes(state.risk) && p.minHorizon <= state.horizon);
+  // All products accessible; filter only by horizon compatibility
+  const eligible = PRODUCTS.filter(p => p.minHorizon <= state.horizon);
   PRODUCTS.forEach(p => { state.alloc[p.id] = 0; });
 
   if (eligible.length === 0) return;
 
-  // Simple equal-weight suggestion weighted by expected return
-  const totalMu = eligible.reduce((s,p) => s + p.mu, 0);
+  // Risk-profile weights: conservateur favors low sigma, dynamique favors high mu
+  const riskWeight = { conservateur: p => 1 / (p.sigma + 0.01), modere: p => p.mu / (p.sigma + 0.01), dynamique: p => p.mu };
+  const wFn = riskWeight[state.risk] || (p => p.mu);
+  const totalW = eligible.reduce((s,p) => s + wFn(p), 0);
   let remaining = 100;
   eligible.forEach((p, i) => {
-    const pct = i === eligible.length-1 ? remaining : Math.round(p.mu / totalMu * 100);
-    state.alloc[p.id] = pct;
+    const pct = i === eligible.length-1 ? remaining : Math.round(wFn(p) / totalW * 100);
+    state.alloc[p.id] = Math.max(0, pct);
     remaining -= pct;
   });
 
