@@ -949,6 +949,14 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
       </div>
     </div>
 
+    <!-- Adéquation profil / portefeuille -->
+    <div class="card" id="profileMatchCard" style="margin-bottom:1rem;display:none;">
+      <h2>Adéquation profil / portefeuille
+        <span class="info-icon" data-tip="Indique si votre allocation correspond au profil déclaré en étape 1, en comparant la volatilité du portefeuille à la plage attendue pour votre profil. Toute combinaison reste possible — il s'agit d'une information comparative, pas d'une restriction.">ⓘ</span>
+      </h2>
+      <div id="profileMatchContent"></div>
+    </div>
+
     <!-- Risque portefeuille -->
     <div class="card" style="margin-bottom:1rem;">
       <h2>Risque du portefeuille
@@ -1151,6 +1159,40 @@ let charts = {};
 let simResults = null;
 // ETFs enabled in the selector — null = not yet initialized (select all by default)
 let activeEtfs = null;
+
+/* ---- PROFIL : définition des plages et suggestions ---- */
+const PROFILE_DEF = {
+  conservateur: { sigmaMin: 0.00, sigmaMax: 0.07, label: 'Conservateur', icon: '🛡️',
+    desc: 'Priorité à la préservation du capital et à la disponibilité des fonds. Faible exposition aux marchés actions.',
+    sigmaDesc: '0 % – 7 % de volatilité annualisée',
+    typical: [
+      ['Livret A / LDDS', '40 – 60 %', 'Capital garanti, taux 2,4 %, disponibilité immédiate'],
+      ['ETF Obligations d\'État (CTO)', '20 – 30 %', 'Faible vol. ~5,5 %, rendement attendu ~3,6 %'],
+      ['ETF Dividendes Europe (PEA)', '10 – 20 %', 'Dividendes stables, vol. modérée ~14,5 %'],
+    ],
+  },
+  modere: { sigmaMin: 0.04, sigmaMax: 0.17, label: 'Modéré', icon: '⚖️',
+    desc: 'Équilibre entre croissance à long terme et limitation des pertes. Exposition actions diversifiée.',
+    sigmaDesc: '4 % – 17 % de volatilité annualisée',
+    typical: [
+      ['Livret A / LDDS', '15 – 25 %', 'Poche de liquidité et sécurité'],
+      ['ETF MSCI World (PEA)', '35 – 50 %', 'Diversification mondiale, μ=7,5 % σ=15,5 %'],
+      ['ETF Obligations d\'État (CTO)', '15 – 25 %', 'Contrepoids stabilisateur aux actions'],
+      ['ETF Europe Stoxx 600 (PEA)', '10 – 20 %', 'Exposition Europe complémentaire'],
+    ],
+  },
+  dynamique: { sigmaMin: 0.12, sigmaMax: 1.00, label: 'Dynamique', icon: '🚀',
+    desc: 'Recherche de croissance maximale à long terme. Forte exposition actions, tolérance aux pertes temporaires élevée.',
+    sigmaDesc: '12 % – 35 %+ de volatilité annualisée',
+    typical: [
+      ['ETF S&P 500 (PEA)', '30 – 40 %', 'Moteur de performance US, μ=8,2 % σ=17 %'],
+      ['ETF Nasdaq 100 (PEA)', '15 – 25 %', 'Exposition tech forte, μ=9 % σ=22 %'],
+      ['ETF Marchés Émergents (CTO)', '15 – 20 %', 'Prime de risque émergents, μ=8,2 % σ=21,5 %'],
+      ['ETF Small Cap Europe (PEA)', '10 – 15 %', 'Prime small caps, μ=7,2 % σ=19,5 %'],
+      ['Livret A / LDDS', '5 – 10 %', 'Poche minimale de liquidité'],
+    ],
+  },
+};
 
 /* ---- STEP NAVIGATION ---- */
 function goStep(n) {
@@ -1709,6 +1751,9 @@ function renderResults() {
     detailBody.appendChild(tr);
   });
 
+  /* Profile match */
+  renderProfileMatch(portSigma, portMu);
+
   /* Charts */
   drawHistogram(finalVals, cap);
   drawDonut(activeProducts);
@@ -1842,6 +1887,56 @@ function drawFanChart(pctBands, steps, dtStep, T) {
   });
 }
 
+/* ---- ADÉQUATION PROFIL ---- */
+function renderProfileMatch(portSigma, portMu) {
+  const card    = document.getElementById('profileMatchCard');
+  const content = document.getElementById('profileMatchContent');
+  const risk    = state.risk;
+  const def     = PROFILE_DEF[risk];
+  if (!def) { card.style.display = 'none'; return; }
+
+  const { sigmaMin, sigmaMax } = def;
+
+  let alertClass, alertTitle, alertMsg;
+  if (portSigma > sigmaMax) {
+    alertClass = 'alert-warning';
+    alertTitle = '⚠️ Portefeuille plus risqué que votre profil déclaré';
+    alertMsg   = `La volatilité de votre portefeuille (<strong>${(portSigma * 100).toFixed(1)} %</strong>) dépasse la borne haute recommandée pour un profil <em>${def.label}</em> (max ${(sigmaMax * 100).toFixed(0)} %). Cette allocation ne correspond pas au profil saisi en étape 1 — elle convient davantage à un profil Dynamique.`;
+  } else if (portSigma < sigmaMin) {
+    alertClass = 'alert-info';
+    alertTitle = 'ℹ️ Portefeuille plus conservateur que votre profil déclaré';
+    alertMsg   = `La volatilité de votre portefeuille (<strong>${(portSigma * 100).toFixed(1)} %</strong>) est inférieure à la borne basse recommandée pour un profil <em>${def.label}</em> (min ${(sigmaMin * 100).toFixed(0)} %). Vous sous-exploitez peut-être votre capacité de prise de risque.`;
+  } else {
+    alertClass = 'alert-success';
+    alertTitle = '✅ Portefeuille cohérent avec votre profil déclaré';
+    alertMsg   = `La volatilité de votre portefeuille (<strong>${(portSigma * 100).toFixed(1)} %</strong>) est dans la plage attendue pour un profil <em>${def.label}</em> (${(sigmaMin * 100).toFixed(0)} % – ${sigmaMax < 1 ? (sigmaMax * 100).toFixed(0) + ' %' : '∞'}).`;
+  }
+
+  const typRows = def.typical.map(([lbl, pct, note]) => `
+    <tr>
+      <td style="font-weight:600;font-size:.83rem;">${lbl}</td>
+      <td style="font-size:.83rem;color:var(--navy);font-weight:700;white-space:nowrap;">${pct}</td>
+      <td style="font-size:.78rem;color:var(--muted);">${note}</td>
+    </tr>`).join('');
+
+  content.innerHTML = `
+    <div class="alert ${alertClass}" style="margin-bottom:1rem;">
+      <strong>${alertTitle}</strong><br>${alertMsg}
+    </div>
+    <div class="section-title">Allocation typique pour un profil ${def.label} ${def.icon}</div>
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:.65rem;">${def.desc}<br>
+      Plage de volatilité cible : <strong>${def.sigmaDesc}</strong>. Ces pondérations sont indicatives — toute combinatoire peut être saisie librement en étape 2.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Support type</th><th>Pondération indicative</th><th>Caractéristiques</th></tr></thead>
+        <tbody>${typRows}</tbody>
+      </table>
+    </div>
+    <p class="chart-comment" style="margin-top:.6rem;">La suggestion automatique de l'étape 2 est calculée dynamiquement selon votre profil et votre horizon d'investissement.</p>
+  `;
+  card.style.display = 'block';
+}
+
 /* ---- RAPPORT PDF ---- */
 function generatePDF() {
   if (!simResults) { alert('Veuillez d\'abord lancer une simulation.'); return; }
@@ -1866,8 +1961,9 @@ function generatePDF() {
   const T   = state.horizon;
   const cap = state.capital;
 
-  const fmtE  = v => v.toLocaleString('fr-FR', { maximumFractionDigits: 0 }) + ' €';
-  const fmtP  = v => (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + ' %';
+  // Formatteur sans séparateur de locale pour compatibilité PDF (évite '/' ou caractères unicode)
+  const fmtE  = v => { const n = Math.round(v); const s = Math.abs(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' '); return (n < 0 ? '-' : '') + s + ' EUR'; };
+  const fmtP  = v => (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
 
   const LM = 15;   // left margin
   const PW = 180;  // content width
@@ -1970,11 +2066,114 @@ function generatePDF() {
   });
   y = doc.lastAutoTable.finalY + 8;
 
-  /* ── PAGE 2 si besoin ── */
+  /* ── 3 — ADÉQUATION PROFIL / PORTEFEUILLE ── */
+  if (y > 210) { doc.addPage(); y = 20; }
+  sectionTitle('3. Adéquation profil / portefeuille', y);
+  y += 6;
+
+  {
+    const pDef = PROFILE_DEF[state.risk];
+    if (pDef) {
+      const { sigmaMin, sigmaMax } = pDef;
+      let matchStatus, boxFill, borderColor;
+      if (portSigma > sigmaMax) {
+        matchStatus  = 'ATTENTION — Portefeuille plus risque que le profil declare (' + pDef.label + ')';
+        boxFill      = [253, 242, 242]; borderColor = [...RED];
+      } else if (portSigma < sigmaMin) {
+        matchStatus  = 'INFO — Portefeuille plus conservateur que le profil declare (' + pDef.label + ')';
+        boxFill      = [232, 240, 248]; borderColor = [26, 90, 138];
+      } else {
+        matchStatus  = 'CONFORME — Portefeuille coherent avec le profil declare (' + pDef.label + ')';
+        boxFill      = [240, 250, 245]; borderColor = [...GREEN];
+      }
+
+      doc.setFillColor(...boxFill);
+      doc.rect(LM, y, PW, 16, 'F');
+      doc.setFillColor(...borderColor);
+      doc.rect(LM, y, 2, 16, 'F');
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...borderColor);
+      doc.text(matchStatus, LM + 5, y + 6);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(60, 60, 60);
+      const sigMaxStr = sigmaMax >= 1 ? 'sans limite' : (sigmaMax * 100).toFixed(0) + '%';
+      doc.text(
+        'Volatilite actuelle : ' + (portSigma * 100).toFixed(1) + '%  |  Plage attendue profil ' + pDef.label + ' : ' + (sigmaMin * 100).toFixed(0) + '% - ' + sigMaxStr + '  |  Rendement attendu : ' + (portMu * 100).toFixed(2) + '%/an',
+        LM + 5, y + 13
+      );
+      y += 20;
+
+      doc.autoTable({
+        startY: y,
+        head: [['Allocation typique — Profil ' + pDef.label + ' ' + pDef.icon + '  |  Cible : ' + pDef.sigmaDesc, 'Pond. indicative', 'Caracteristiques']],
+        body: pDef.typical,
+        margin: { left: LM },
+        tableWidth: PW,
+        styles: { fontSize: 8.5, cellPadding: 2.2 },
+        headStyles: { fillColor: [...NAVY], textColor: [...WHITE], fontStyle: 'bold', fontSize: 7.5 },
+        alternateRowStyles: { fillColor: [...CREAM] },
+        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 80 }, 1: { cellWidth: 30, textColor: [...NAVY] }, 2: { cellWidth: 70, textColor: [...MUTED] } },
+      });
+      y = doc.lastAutoTable.finalY + 5;
+
+      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(...MUTED);
+      doc.text('* Ces pondérations sont indicatives. Toute combinatoire peut être saisie librement — ce tableau sert uniquement de référence de profil.', LM, y);
+      y += 8;
+    }
+  }
+
+  /* ── 4 — GRAPHIQUES ── */
+  if (y > 185) { doc.addPage(); y = 20; }
+  sectionTitle('4. Graphiques de simulation', y);
+  y += 7;
+
+  try {
+    const histCv  = document.getElementById('histChart');
+    const donutCv = document.getElementById('donutChart');
+    const fanCv   = document.getElementById('fanChart');
+
+    if (histCv && donutCv) {
+      const histImg  = histCv.toDataURL('image/png', 0.9);
+      const donutImg = donutCv.toDataURL('image/png', 0.9);
+
+      // Deux graphiques côte à côte
+      doc.addImage(histImg,  'PNG', LM,      y, 86, 57);
+      doc.addImage(donutImg, 'PNG', LM + 93, y, 86, 57);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(...MUTED);
+      doc.text('Distribution des 3 000 valeurs finales (barres rouges = perte de capital)', LM, y + 60);
+      doc.text('Repartition du portefeuille par support (%)', LM + 93, y + 60);
+      y += 66;
+    }
+
+    if (fanCv) {
+      if (y > 195) { doc.addPage(); y = 20; }
+      const fanImg = fanCv.toDataURL('image/png', 0.9);
+      doc.addImage(fanImg, 'PNG', LM, y, PW, 78);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'italic');
+      doc.setTextColor(...MUTED);
+      doc.text('Fan chart : median P50 (ligne bleue), bande P25-P75 (50% des scenar.), bande P5-P95 (90% des scenar.)', LM, y + 81);
+      y += 88;
+    }
+  } catch (chartErr) {
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...RED);
+    doc.text('Graphiques non disponibles (erreur de rendu canvas).', LM, y);
+    y += 10;
+  }
+
+  /* ── PAGE suivante si besoin ── */
   if (y > 210) { doc.addPage(); y = 20; }
 
-  /* 3 — BREAKDOWN FISCAL */
-  sectionTitle('3. Breakdown fiscal par véhicule d\'investissement', y);
+  /* 5 — BREAKDOWN FISCAL */
+  sectionTitle('5. Breakdown fiscal par véhicule d\'investissement', y);
   y += 4;
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'italic');
@@ -2030,11 +2229,11 @@ function generatePDF() {
   });
   y = doc.lastAutoTable.finalY + 8;
 
-  /* ── PAGE 3 ── */
+  /* ── PAGE suivante si besoin ── */
   if (y > 200) { doc.addPage(); y = 20; }
 
-  /* 4 — DÉTAIL PAR SUPPORT */
-  sectionTitle('4. Détail par support d\'investissement', y);
+  /* 6 — DÉTAIL PAR SUPPORT */
+  sectionTitle('6. Détail par support d\'investissement', y);
   y += 6;
 
   const detailRows = activeProducts.map(p => {
@@ -2067,10 +2266,10 @@ function generatePDF() {
   });
   y = doc.lastAutoTable.finalY + 10;
 
-  /* ── PAGE 4 — MÉTHODOLOGIE ── */
+  /* ── MÉTHODOLOGIE ── */
   if (y > 210) { doc.addPage(); y = 20; }
 
-  sectionTitle('5. Méthodologie — Mouvement Brownien Géométrique (MBG)', y);
+  sectionTitle('7. Méthodologie — Mouvement Brownien Géométrique (MBG)', y);
   y += 7;
 
   const writeBlock = (title, text) => {
@@ -2108,9 +2307,9 @@ function generatePDF() {
     'La simulation actuelle traite chaque support de manière indépendante (corrélation nulle entre les actifs). En pratique, les actifs actions mondiaux présentent des corrélations positives significatives (notamment en période de crise), ce qui peut sous-estimer le risque de pertes simultanées. L\'introduction d\'une matrice de corrélation (modèle de Cholesky) constituerait une amélioration future du modèle.'
   );
 
-  /* 6 — FISCALITÉ */
+  /* 8 — FISCALITÉ */
   if (y > 210) { doc.addPage(); y = 20; }
-  sectionTitle('6. Fiscalité française des revenus du capital (2026)', y);
+  sectionTitle('8. Fiscalité française des revenus du capital (2026)', y);
   y += 7;
 
   writeBlock(
@@ -2138,9 +2337,9 @@ function generatePDF() {
     'Totalement exonérés d\'IR et de PS. Taux garantis par l\'État, révisables périodiquement. Plafonds de versements réglementés (Livret A : 22 950 €, LDDS : 12 000 €, LEP : 10 000 € — réservé aux foyers sous plafond de revenus). Disponibilité immédiate des fonds.'
   );
 
-  /* 7 — LIMITES */
+  /* 9 — LIMITES */
   if (y > 210) { doc.addPage(); y = 20; }
-  sectionTitle('7. Limites du modèle et précautions d\'interprétation', y);
+  sectionTitle('9. Limites du modèle et précautions d\'interprétation', y);
   y += 7;
 
   writeBlock(
@@ -2158,7 +2357,7 @@ function generatePDF() {
     'La fiscalité française est susceptible d\'évoluer (évolution des taux de PS, du PFU, des abattements). Les calculs présentés sont basés sur la législation en vigueur au 01/01/2026 et constituent des estimations indicatives. La situation fiscale réelle dépend de nombreux facteurs individuels non pris en compte (revenus totaux, situation matrimoniale, CEHR, ISF/IFI…).'
   );
 
-  /* 8 — AVERTISSEMENT */
+  /* 10 — AVERTISSEMENT */
   if (y > 248) { doc.addPage(); y = 20; }
   doc.setFillColor(...CREAM);
   doc.rect(LM, y, PW, 30, 'F');
