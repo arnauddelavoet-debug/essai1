@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SimuPortefeuille — Simulation d'actifs financiers</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo">
+      <span class="logo-icon">📊</span>
+      <span class="logo-text">SimuPortefeuille</span>
+    </div>
+    <p class="header-sub">Simulation de portefeuille financier &amp; analyse de risque</p>
+  </div>
+</header>
+
+<main>
+  <!-- STEPPER -->
+  <nav class="stepper" aria-label="Étapes">
+    <div class="step active" data-step="1">
+      <div class="step-circle">1</div>
+      <span>Profil</span>
+    </div>
+    <div class="step-line"></div>
+    <div class="step" data-step="2">
+      <div class="step-circle">2</div>
+      <span>Allocation</span>
+    </div>
+    <div class="step-line"></div>
+    <div class="step" data-step="3">
+      <div class="step-circle">3</div>
+      <span>Résultats</span>
+    </div>
+  </nav>
+
+  <!-- ===== STEP 1 : PROFIL ===== -->
+  <section id="step-1" class="card step-panel active">
+    <h2>Votre profil d'investisseur</h2>
+
+    <div class="form-group">
+      <label for="capital">Capital initial (€)</label>
+      <div class="input-row">
+        <input type="range" id="capital-slider" min="1000" max="200000" step="1000" value="10000" />
+        <input type="number" id="capital" min="100" max="1000000" value="10000" />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="horizon">Horizon de placement</label>
+      <div class="input-row">
+        <input type="range" id="horizon-slider" min="1" max="30" step="1" value="10" />
+        <div class="input-with-unit">
+          <input type="number" id="horizon" min="1" max="30" value="10" />
+          <span class="unit">ans</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Tolérance au risque</label>
+      <div class="risk-cards">
+        <label class="risk-card">
+          <input type="radio" name="risk" value="conservateur" checked />
+          <div class="risk-card-inner">
+            <span class="risk-icon">🛡️</span>
+            <strong>Conservateur</strong>
+            <p>Priorité à la préservation du capital. Faible volatilité.</p>
+          </div>
+        </label>
+        <label class="risk-card">
+          <input type="radio" name="risk" value="modere" />
+          <div class="risk-card-inner">
+            <span class="risk-icon">⚖️</span>
+            <strong>Modéré</strong>
+            <p>Équilibre rendement/risque. Volatilité maîtrisée.</p>
+          </div>
+        </label>
+        <label class="risk-card">
+          <input type="radio" name="risk" value="dynamique" />
+          <div class="risk-card-inner">
+            <span class="risk-icon">🚀</span>
+            <strong>Dynamique</strong>
+            <p>Recherche de performance. Accepte la volatilité.</p>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Versements mensuels (optionnel)</label>
+      <div class="input-row">
+        <input type="range" id="mensuel-slider" min="0" max="2000" step="50" value="0" />
+        <div class="input-with-unit">
+          <input type="number" id="mensuel" min="0" max="10000" value="0" />
+          <span class="unit">€/mois</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="goToStep(2)">Suivant →</button>
+    </div>
+  </section>
+
+  <!-- ===== STEP 2 : ALLOCATION ===== -->
+  <section id="step-2" class="card step-panel">
+    <h2>Allocation par produit</h2>
+    <p class="hint">Répartissez votre capital entre les différents supports. Total = 100 %</p>
+
+    <div id="allocation-suggestions" class="suggestion-bar"></div>
+
+    <div class="products-grid" id="products-grid">
+      <!-- Injected by JS -->
+    </div>
+
+    <div class="total-bar">
+      <span>Total alloué :</span>
+      <span id="total-pct" class="total-pct neutral">0 %</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goToStep(1)">← Retour</button>
+      <button class="btn btn-primary" id="simulate-btn" onclick="runSimulation()">Simuler →</button>
+    </div>
+  </section>
+
+  <!-- ===== STEP 3 : RÉSULTATS ===== -->
+  <section id="step-3" class="card step-panel">
+    <h2>Résultats de la simulation</h2>
+    <p class="hint" id="sim-subtitle"></p>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-danger">
+        <div class="kpi-label">Probabilité de perte en capital</div>
+        <div class="kpi-value" id="kpi-loss">—</div>
+        <div class="kpi-sub" id="kpi-loss-sub"></div>
+      </div>
+      <div class="kpi-card kpi-info">
+        <div class="kpi-label">Valeur médiane à l'échéance</div>
+        <div class="kpi-value" id="kpi-median">—</div>
+        <div class="kpi-sub" id="kpi-median-sub"></div>
+      </div>
+      <div class="kpi-card kpi-success">
+        <div class="kpi-label">Scénario optimiste (90e pct.)</div>
+        <div class="kpi-value" id="kpi-p90">—</div>
+        <div class="kpi-sub" id="kpi-p90-sub"></div>
+      </div>
+      <div class="kpi-card kpi-warning">
+        <div class="kpi-label">Scénario pessimiste (10e pct.)</div>
+        <div class="kpi-value" id="kpi-p10">—</div>
+        <div class="kpi-sub" id="kpi-p10-sub"></div>
+      </div>
+    </div>
+
+    <!-- Risk gauge -->
+    <div class="gauge-section">
+      <h3>Niveau de risque global</h3>
+      <div class="gauge-wrap">
+        <canvas id="gauge-chart" width="300" height="160"></canvas>
+        <div class="gauge-label" id="gauge-label">—</div>
+      </div>
+    </div>
+
+    <!-- Distribution histogram -->
+    <div class="chart-section">
+      <h3>Distribution des valeurs finales (10 000 simulations)</h3>
+      <div class="chart-container">
+        <canvas id="dist-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Percentile fan chart -->
+    <div class="chart-section">
+      <h3>Trajectoires possibles dans le temps</h3>
+      <div class="chart-container">
+        <canvas id="fan-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Allocation donut -->
+    <div class="chart-section chart-section--half">
+      <h3>Répartition du portefeuille</h3>
+      <div class="chart-container chart-container--small">
+        <canvas id="donut-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Detail table -->
+    <div class="chart-section">
+      <h3>Détail par support</h3>
+      <div class="table-wrap">
+        <table class="detail-table" id="detail-table">
+          <thead>
+            <tr>
+              <th>Support</th>
+              <th>Véhicule</th>
+              <th>Allocation</th>
+              <th>Rendement attendu</th>
+              <th>Volatilité</th>
+              <th>Valeur médiane</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Risk explanation -->
+    <div class="explainer" id="risk-explainer"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goToStep(2)">← Modifier</button>
+      <button class="btn btn-outline" onclick="goToStep(1)">Recommencer</button>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <p>Simulation à titre indicatif uniquement — Pas un conseil en investissement.</p>
+  <p>Modèle de Mouvement Brownien Géométrique (Monte Carlo, 10 000 scénarios).</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
