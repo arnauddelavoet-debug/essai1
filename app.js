@@ -23,12 +23,12 @@ const PRODUCTS = [
     vehicle: 'Livret',
     vehicleLabel: 'Livret A',
     icon: '🏦',
-    mu: 0.03,
+    mu: 0.015,
     sigma: 0.0,
     guaranteed: true,
     minHorizon: 0,
     riskProfile: ['conservateur', 'modere', 'dynamique'],
-    description: 'Épargne réglementée garantie à 3 % (taux 2024), plafond 22 950 €.',
+    description: 'Épargne réglementée garantie, taux 1,50 % (fév.–juil. 2026), plafond 22 950 €. Totalement exonérée d\'IR et de prélèvements sociaux.',
   },
   {
     id: 'ldds',
@@ -36,12 +36,12 @@ const PRODUCTS = [
     vehicle: 'Livret',
     vehicleLabel: 'LDDS',
     icon: '💚',
-    mu: 0.03,
+    mu: 0.015,
     sigma: 0.0,
     guaranteed: true,
     minHorizon: 0,
     riskProfile: ['conservateur', 'modere', 'dynamique'],
-    description: 'Livret Développement Durable et Solidaire, taux identique au Livret A.',
+    description: 'Livret Développement Durable et Solidaire, taux 1,50 % (fév.–juil. 2026), plafond 12 000 €. Exonéré d\'IR et de prélèvements sociaux.',
   },
   {
     id: 'fonds-euro',
@@ -49,12 +49,12 @@ const PRODUCTS = [
     vehicle: 'AV',
     vehicleLabel: 'Assurance-vie',
     icon: '🔒',
-    mu: 0.025,
+    mu: 0.026,
     sigma: 0.004,
     guaranteed: false,
     minHorizon: 3,
     riskProfile: ['conservateur', 'modere'],
-    description: 'Capital quasi-garanti, rendement net ~2–2,5 % selon contrat.',
+    description: 'Capital quasi-garanti, rendement moyen 2,60 % net de frais (marché 2024). PS 17,2 % applicables uniquement au rachat.',
   },
   {
     id: 'obligations-etat',
@@ -358,7 +358,7 @@ function renderProducts() {
 
     // Stat pills (données issues de constantes — pas d'input utilisateur)
     const pillReturn = `<span class="stat-pill return">~${(p.mu * 100).toFixed(1)}\u202f%/an</span>`;
-    const pillVol    = p.sigma > 0 ? `<span class="stat-pill vol">σ\u202f${(p.sigma * 100).toFixed(0)}\u202f%</span>` : '';
+    const pillVol    = p.sigma > 0 ? `<span class="stat-pill vol">Vol.\u202f${(p.sigma * 100).toFixed(0)}\u202f%</span>` : '';
     const pillGuar   = p.guaranteed ? '<span class="stat-pill guaranteed">Garanti</span>' : '';
     const pillMin    = !eligible ? `<span class="stat-pill min-hor">Horizon min.\u202f${p.minHorizon}\u202fans</span>` : '';
 
@@ -493,8 +493,8 @@ function simulatePath(capital, mu, sigma, horizon, mensuel) {
 }
 
 /**
- * Calcule les paramètres μ et σ du portefeuille mixte.
- * σ_P = √(Σ (w_i · σ_i)²)  — indépendance des actifs (borne haute du risque réel).
+ * Calcule le rendement moyen et la volatilité du portefeuille mixte.
+ * Volatilité globale = racine carrée de la somme des variances pondérées — actifs supposés indépendants (borne haute du risque réel).
  */
 function blendedParams(allocations) {
   let mu   = 0;
@@ -605,7 +605,7 @@ function renderResults() {
   const subtitle = document.getElementById('sim-subtitle');
   subtitle.textContent =
     `Capital : ${fmt(capital)} — Horizon : ${horizon} ans — ` +
-    `Versements : ${fmt(mensuel)}/mois — μ : ${fmtPct(mu)} — σ : ${fmtPct(sigma)}`;
+    `Versements : ${fmt(mensuel)}/mois — Rdt moy. : ${fmtPct(mu)} — Volatilité : ${fmtPct(sigma)}`;
 
   // KPIs
   document.getElementById('kpi-loss').textContent     = fmtPct(probLoss);
@@ -810,33 +810,113 @@ function renderDonut() {
   });
 }
 
+// ── Taux d'imposition estimé selon véhicule et horizon ────────
+/**
+ * Retourne le taux d'imposition applicable aux gains (PFU 2026).
+ * Livret A/LDDS : 0 % (exonération totale).
+ * PEA ≥ 5 ans : 18,6 % PS uniquement.
+ * PEA < 5 ans : PFU 31,4 % (12,8 % IR + 18,6 % PS).
+ * AV ≥ 8 ans : 24,7 % (7,5 % IR + 17,2 % PS).
+ * AV < 8 ans : PFU 30 %.
+ * CTO : PFU 31,4 %.
+ */
+function getTaxRate(vehicle, horizon) {
+  switch (vehicle) {
+    case 'Livret': return 0;
+    case 'PEA':    return horizon >= 5 ? 0.186 : 0.314;
+    case 'AV':     return horizon >= 8 ? 0.247 : 0.30;
+    case 'CTO':    return 0.314;
+    default:       return 0.314;
+  }
+}
+
 // ── Table détail ───────────────────────────────────────────────
 function renderTable(capital, horizon, mensuel) {
   const tbody = document.querySelector('#detail-table tbody');
   tbody.textContent = ''; // sûr vs innerHTML = ''
+
+  let totalBrut  = 0;
+  let totalImpot = 0;
+  let totalNette = 0;
 
   for (const [id, pct] of Object.entries(state.allocations)) {
     if (!pct) continue;
     const p = PRODUCTS.find(x => x.id === id);
     if (!p) continue;
 
-    const w = pct / 100;
-    const { p50 } = singleProductSim(capital * w, p.mu, p.sigma, horizon, mensuel * w);
+    const w          = pct / 100;
+    const capInv     = capital * w + mensuel * w * 12 * horizon;
+    const { p50 }    = singleProductSim(capital * w, p.mu, p.sigma, horizon, mensuel * w);
+    const taxRate    = getTaxRate(p.vehicle, horizon);
+    const gainBrut   = Math.max(0, p50 - capInv);
+    const impot      = gainBrut * taxRate;
+    const valNette   = p50 - impot;   // = capInv + gainBrut - impot
+
+    totalBrut  += p50;
+    totalImpot += impot;
+    totalNette += valNette;
 
     const tr = document.createElement('tr');
 
-    const cells = [
-      () => { const td = document.createElement('td'); const b = document.createElement('b'); b.textContent = `${p.icon} ${p.name}`; td.appendChild(b); return td; },
-      () => { const td = document.createElement('td'); const sp = document.createElement('span'); sp.className = `product-vehicle ${vehicleClass(p.vehicle)}`; sp.textContent = p.vehicleLabel; td.appendChild(sp); return td; },
-      () => { const td = document.createElement('td'); td.textContent = `${pct}\u202f%`; return td; },
-      () => { const td = document.createElement('td'); td.textContent = fmtPct(p.mu); return td; },
-      () => { const td = document.createElement('td'); td.textContent = fmtPct(p.sigma); return td; },
-      () => { const td = document.createElement('td'); td.textContent = fmt(p50); return td; },
-    ];
+    const mkTd = (text, align) => {
+      const td = document.createElement('td');
+      td.textContent = text;
+      if (align) td.style.textAlign = align;
+      return td;
+    };
 
-    cells.forEach(fn => tr.appendChild(fn()));
+    const tdSupport = document.createElement('td');
+    const b = document.createElement('b');
+    b.textContent = `${p.icon} ${p.name}`;
+    tdSupport.appendChild(b);
+
+    const tdVehicle = document.createElement('td');
+    const sp = document.createElement('span');
+    sp.className = `product-vehicle ${vehicleClass(p.vehicle)}`;
+    sp.textContent = p.vehicleLabel;
+    tdVehicle.appendChild(sp);
+
+    tr.appendChild(tdSupport);
+    tr.appendChild(tdVehicle);
+    tr.appendChild(mkTd(`${pct}\u202f%`, 'center'));
+    tr.appendChild(mkTd(fmtPct(p.mu), 'center'));
+    tr.appendChild(mkTd(fmtPct(p.sigma), 'center'));
+    tr.appendChild(mkTd(fmt(p50), 'right'));
+    tr.appendChild(mkTd(gainBrut > 0 ? fmt(gainBrut) : '—', 'right'));
+    const tdImpot = mkTd(impot > 0 ? fmt(impot) : `${(taxRate * 100).toFixed(1)}\u202f% → 0\u202f€`, 'right');
+    if (impot > 0) tdImpot.title = `Taux : ${(taxRate * 100).toFixed(1)}\u202f%`;
+    tr.appendChild(tdImpot);
+    const tdNette = mkTd(fmt(valNette), 'right');
+    tdNette.style.fontWeight = '700';
+    tr.appendChild(tdNette);
+
     tbody.appendChild(tr);
   }
+
+  // Ligne TOTAL
+  const trTotal = document.createElement('tr');
+  trTotal.className = 'table-total-row';
+  const mkTotalTd = (text, align, bold) => {
+    const td = document.createElement('td');
+    td.textContent = text;
+    if (align) td.style.textAlign = align;
+    if (bold) td.style.fontWeight = '700';
+    return td;
+  };
+  const tdTotalLabel = document.createElement('td');
+  tdTotalLabel.colSpan = 2;
+  const bTotal = document.createElement('b');
+  bTotal.textContent = 'TOTAL';
+  tdTotalLabel.appendChild(bTotal);
+  trTotal.appendChild(tdTotalLabel);
+  trTotal.appendChild(mkTotalTd('100\u202f%', 'center', true));
+  trTotal.appendChild(mkTotalTd('', 'center', false));
+  trTotal.appendChild(mkTotalTd('', 'center', false));
+  trTotal.appendChild(mkTotalTd(fmt(totalBrut), 'right', true));
+  trTotal.appendChild(mkTotalTd(fmt(totalBrut - (capital + mensuel * 12 * horizon)), 'right', true));
+  trTotal.appendChild(mkTotalTd(fmt(totalImpot), 'right', true));
+  trTotal.appendChild(mkTotalTd(fmt(totalNette), 'right', true));
+  tbody.appendChild(trTotal);
 }
 
 function singleProductSim(capital, mu, sigma, horizon, mensuel) {
@@ -884,8 +964,8 @@ function renderExplainer(probLoss, probLossInvested, mu, sigma) {
   const items = [
     `Probabilité de ne pas récupérer le capital initial (${fmt(capital)}) : ${fmtPct(probLoss)}`,
     `Probabilité de ne pas récupérer le total investi (${fmt(totalInvested)}) : ${fmtPct(probLossInvested)}`,
-    `Rendement annuel moyen (μ) : ${fmtPct(mu)}`,
-    `Volatilité annuelle globale (σ) : ${fmtPct(sigma)}`,
+    `Rendement annuel moyen du portefeuille : ${fmtPct(mu)}`,
+    `Volatilité annuelle globale du portefeuille : ${fmtPct(sigma)}`,
     `Fourchette à ${horizon} ans : de ${fmt(p10)} (pessimiste) à ${fmt(p90)} (optimiste) — médiane ${fmt(p50)}`,
     `Méthode : Mouvement Brownien Géométrique, ${N_SIMS.toLocaleString('fr-FR')} scénarios.`,
   ];
@@ -1093,8 +1173,8 @@ async function generatePDF() {
         ['Versements mensuels', fmt(mensuel) + '/mois'],
         ['Capital total investi', fmt(totalInvested)],
         ['Profil de risque', risk.charAt(0).toUpperCase() + risk.slice(1)],
-        ['Rendement annuel moyen (μ)', fmtPct(mu)],
-        ['Volatilité annuelle (σ)', fmtPct(sigma)],
+        ['Rendement annuel moyen du portefeuille', fmtPct(mu)],
+        ['Volatilité annuelle du portefeuille', fmtPct(sigma)],
         ['Nombre de simulations', N_SIMS.toLocaleString('fr-FR')],
         ['Modèle', 'Mouvement Brownien Géométrique (MBG)'],
       ],
@@ -1122,11 +1202,13 @@ async function generatePDF() {
 
     doc.autoTable({
       startY: y,
-      head: [['Support', 'Véhicule', 'Alloc.', 'Rdt μ', 'Vol. σ']],
+      head: [['Support', 'Véhicule', 'Alloc.', 'Rdt/an', 'Volatilité']],
       body: allocRows,
+      foot: [['TOTAL', '', '100 %', '', '']],
       theme: 'grid',
       headStyles:   { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
       bodyStyles:   { fontSize: 7.5, textColor: TEXT },
+      footStyles:   { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
       alternateRowStyles: { fillColor: LIGHT },
       columnStyles: { 0: { cellWidth: 65 }, 1: { cellWidth: 35 }, 2: { cellWidth: 18, halign: 'center' }, 3: { cellWidth: 20, halign: 'center' }, 4: { cellWidth: 20, halign: 'center' } },
       margin: { left: ML, right: MR },
@@ -1251,32 +1333,59 @@ async function generatePDF() {
     y = 22;
     y = sectionTitle(y, 'DÉTAIL PAR SUPPORT D\'INVESTISSEMENT');
 
+    let pdfTotalBrut  = 0;
+    let pdfTotalImpot = 0;
+    let pdfTotalNette = 0;
+
     const detailRows = Object.entries(state.allocations)
       .filter(([, pct]) => pct > 0)
       .map(([id, pct]) => {
         const p = PRODUCTS.find(x => x.id === id);
         if (!p) return null;
-        const w = pct / 100;
+        const w        = pct / 100;
+        const capInv   = capital * w + mensuel * w * 12 * horizon;
         const { p50: med } = singleProductSim(capital * w, p.mu, p.sigma, horizon, mensuel * w);
-        return [p.name, p.vehicleLabel, `${pct} %`, fmtPct(p.mu), fmtPct(p.sigma), fmt(med)];
+        const taxRate  = getTaxRate(p.vehicle, horizon);
+        const gainBrut = Math.max(0, med - capInv);
+        const impot    = gainBrut * taxRate;
+        const nette    = med - impot;
+        pdfTotalBrut  += med;
+        pdfTotalImpot += impot;
+        pdfTotalNette += nette;
+        return [
+          p.name,
+          p.vehicleLabel,
+          `${pct} %`,
+          fmtPct(p.mu),
+          fmtPct(p.sigma),
+          fmt(med),
+          gainBrut > 0 ? fmt(gainBrut) : '—',
+          impot > 0 ? `${fmt(impot)} (${(taxRate * 100).toFixed(1)} %)` : `0 € (exo.)`,
+          fmt(nette),
+        ];
       })
       .filter(Boolean);
 
     doc.autoTable({
       startY: y,
-      head: [['Support', 'Véhicule', 'Alloc.', 'Rdt μ', 'Vol. σ', 'Val. médiane']],
+      head: [['Support', 'Véhicule', 'Alloc.', 'Rdt/an', 'Volatilité', 'Val. brute', 'Gain brut', 'Impôt est.', 'Val. nette']],
       body: detailRows,
+      foot: [['TOTAL', '', '100 %', '', '', fmt(pdfTotalBrut), fmt(pdfTotalBrut - (capital + mensuel * 12 * horizon)), fmt(pdfTotalImpot), fmt(pdfTotalNette)]],
       theme: 'grid',
-      headStyles:   { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
-      bodyStyles:   { fontSize: 7.5, textColor: TEXT },
+      headStyles:   { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 6.5 },
+      bodyStyles:   { fontSize: 6.5, textColor: TEXT },
+      footStyles:   { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 6.5 },
       alternateRowStyles: { fillColor: LIGHT },
       columnStyles: {
-        0: { cellWidth: 58 },
-        1: { cellWidth: 30 },
-        2: { cellWidth: 18, halign: 'center' },
-        3: { cellWidth: 20, halign: 'center' },
-        4: { cellWidth: 20, halign: 'center' },
-        5: { cellWidth: 28, halign: 'right' },
+        0: { cellWidth: 36 },
+        1: { cellWidth: 22 },
+        2: { cellWidth: 12, halign: 'center' },
+        3: { cellWidth: 14, halign: 'center' },
+        4: { cellWidth: 16, halign: 'center' },
+        5: { cellWidth: 20, halign: 'right' },
+        6: { cellWidth: 18, halign: 'right' },
+        7: { cellWidth: 22, halign: 'right' },
+        8: { cellWidth: 22, halign: 'right' },
       },
       margin: { left: ML, right: MR },
     });
@@ -1289,20 +1398,20 @@ async function generatePDF() {
 
     doc.autoTable({
       startY: y,
-      head: [['Véhicule', 'Régime applicable']],
+      head: [['Véhicule', 'Régime fiscal 2026', 'Taux sur gains']],
       body: [
-        ['Livret A / LDDS',      'Exonération totale IR + PS'],
-        ['PEA ≥ 5 ans',          'PS 17,2 % uniquement (exo IR)'],
-        ['PEA < 5 ans',          'PFU 30 % (IR 12,8 % + PS 17,2 %)'],
-        ['Assurance-vie ≥ 8 ans','IR 7,5 % + PS 17,2 % (après abattement)'],
-        ['Assurance-vie < 8 ans','PFU 30 %'],
-        ['CTO',                  'PFU 30 % (ou barème IR si plus favorable)'],
+        ['Livret A / LDDS',       'Exonération totale IR + prélèvements sociaux',                                        '0 %'],
+        ['PEA ≥ 5 ans',           'Prélèvements sociaux uniquement (IR exonéré) — LFSS 2026',                            '18,6 %'],
+        ['PEA < 5 ans',           'PFU (Prélèvement Forfaitaire Unique) — IR + prélèvements sociaux',                    '31,4 %'],
+        ['Assurance-vie ≥ 8 ans', 'IR réduit + prélèvements sociaux après abattement (4 600 €/pers. ou 9 200 €/couple)', '24,7 %'],
+        ['Assurance-vie < 8 ans', 'PFU complet — IR + prélèvements sociaux',                                            '30,0 %'],
+        ['CTO',                   'PFU 2026 — IR + prélèvements sociaux (hausse CSG LFSS 2026)',                         '31,4 %'],
       ],
       theme: 'grid',
-      headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 8 },
-      bodyStyles:  { fontSize: 7.5, textColor: TEXT },
+      headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
+      bodyStyles:  { fontSize: 7, textColor: TEXT },
       alternateRowStyles: { fillColor: LIGHT },
-      columnStyles: { 0: { cellWidth: 60, fontStyle: 'bold' } },
+      columnStyles: { 0: { cellWidth: 42, fontStyle: 'bold' }, 1: { cellWidth: 110 }, 2: { cellWidth: 20, halign: 'center', fontStyle: 'bold' } },
       margin: { left: ML, right: MR },
     });
 
@@ -1319,8 +1428,8 @@ async function generatePDF() {
       "Ce document est produit à titre purement informatif et pédagogique. Il ne constitue pas un conseil en investissement au sens de la directive MIF II.",
       "Les performances passées ne préjugent pas des performances futures. Les projections résultent d'un modèle stochastique et ne constituent pas des garanties.",
       "Le Mouvement Brownien Géométrique suppose des rendements log-normalement distribués et une volatilité constante, ce qui représente une approximation simplifiée de la réalité des marchés.",
-      "Les paramètres (μ, σ) utilisés sont des estimations basées sur des données historiques moyennes et peuvent différer significativement sur votre horizon d'investissement.",
-      "La corrélation entre actifs n'est pas modélisée dans cette version (σ_P = √Σ(w·σ)² — borne haute du risque réel).",
+      "Les paramètres de rendement moyen et de volatilité utilisés sont des estimations basées sur des données historiques moyennes et peuvent différer significativement sur votre horizon d'investissement.",
+      "La corrélation entre actifs n'est pas modélisée dans cette version — la volatilité globale est estimée comme la racine carrée de la somme des variances pondérées (borne haute du risque réel).",
       "Avant toute décision d'investissement, consultez un conseiller en gestion de patrimoine (CGP) agréé par l'AMF.",
     ];
 

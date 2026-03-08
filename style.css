@@ -540,7 +540,8 @@ input[type="range"] {
 .kpi-card.kpi-info    .kpi-value { color: var(--info); }
 .kpi-card.kpi-success .kpi-value { color: var(--success); }
 .kpi-card.kpi-warning .kpi-value { color: var(--warning); }
-.kpi-sub { font-size: .72rem; color: var(--muted); }
+.kpi-sub  { font-size: .72rem; color: var(--muted); }
+.kpi-desc { font-size: .7rem; color: var(--muted); font-style: italic; margin-bottom: .3rem; line-height: 1.3; }
 
 /* ── GAUGE ───────────────────────────────────────────────── */
 .gauge-section { margin-bottom: .9rem; }
@@ -612,6 +613,14 @@ input[type="range"] {
 
 .detail-table tr:last-child td { border-bottom: none; }
 .detail-table tr:hover td { background: var(--bg); }
+
+.table-total-row td,
+.detail-table tr.table-total-row:hover td {
+  background: #1e3a5f;
+  color: #fff;
+  font-weight: 700;
+  border-top: 2px solid var(--primary);
+}
 
 /* ── EXPLAINER ───────────────────────────────────────────── */
 .explainer {
