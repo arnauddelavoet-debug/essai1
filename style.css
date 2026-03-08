@@ -829,6 +829,7 @@ footer {
 .pb-unit { color: var(--muted); font-size: .72rem; }
 
 /* ── MODAL ────────────────────────────────────────────────── */
+.modal-overlay[hidden] { display: none; }
 .modal-overlay {
   position: fixed;
   inset: 0;
