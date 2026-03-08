@@ -53,7 +53,6 @@
       <span class="logo-text">SimuPortefeuille</span>
     </div>
     <p class="header-sub">Simulation de portefeuille financier &amp; analyse de risque</p>
-    <button class="btn-admin" id="btn-admin" aria-label="Administration des sources et taux">⚙</button>
   </div>
 </header>
 
@@ -75,9 +74,6 @@
       <span>Résultats</span>
     </div>
   </nav>
-
-  <!-- ── BARRE DE PARAMÈTRES PERSISTANTE ── -->
-  <div id="param-bar" class="param-bar" hidden aria-label="Paramètres du projet"></div>
 
   <!-- ═══════════════════════════════════════════
        ÉTAPE 1 — PROFIL
@@ -220,10 +216,6 @@
               aria-controls="tab-detail" id="tbtn-detail" data-tab="detail">
         📋 Détail
       </button>
-      <button class="tab-btn" role="tab" aria-selected="false"
-              aria-controls="tab-strategy" id="tbtn-strategy" data-tab="strategy">
-        🗺 Stratégie
-      </button>
     </nav>
 
     <!-- ─── Onglet 1 : Indicateurs clés ─── -->
@@ -234,7 +226,6 @@
             Probabilité de perte
             <span class="info-icon info-icon--sm" data-tooltip="Fraction des 10 000 scénarios dans lesquels la valeur finale est inférieure au capital investi.">ⓘ</span>
           </div>
-          <div class="kpi-desc">Part des simulations où le capital final est inférieur au capital de départ</div>
           <div class="kpi-value" id="kpi-loss">—</div>
           <div class="kpi-sub" id="kpi-loss-sub"></div>
         </div>
@@ -243,25 +234,22 @@
             Valeur médiane
             <span class="info-icon info-icon--sm" data-tooltip="La médiane (50e percentile) : 50 % des simulations donnent un résultat inférieur, 50 % supérieur.">ⓘ</span>
           </div>
-          <div class="kpi-desc">Résultat le plus probable — 50 % des scénarios sont au-dessus, 50 % en dessous</div>
           <div class="kpi-value" id="kpi-median">—</div>
           <div class="kpi-sub" id="kpi-median-sub"></div>
         </div>
         <div class="kpi-card kpi-success">
           <div class="kpi-label">
-            Scénario optimiste (90e centile)
+            Scénario optimiste
             <span class="info-icon info-icon--sm" data-tooltip="90e percentile : seulement 10 % des simulations dépassent cette valeur.">ⓘ</span>
           </div>
-          <div class="kpi-desc">Valeur atteinte ou dépassée dans seulement 10 % des cas — cas favorable</div>
           <div class="kpi-value" id="kpi-p90">—</div>
           <div class="kpi-sub" id="kpi-p90-sub"></div>
         </div>
         <div class="kpi-card kpi-warning">
           <div class="kpi-label">
-            Scénario pessimiste (10e centile)
+            Scénario pessimiste
             <span class="info-icon info-icon--sm" data-tooltip="10e percentile : 10 % des simulations sont inférieures à cette valeur.">ⓘ</span>
           </div>
-          <div class="kpi-desc">Valeur en dessous de laquelle se situent 10 % des scénarios — cas défavorable</div>
           <div class="kpi-value" id="kpi-p10">—</div>
           <div class="kpi-sub" id="kpi-p10-sub"></div>
         </div>
@@ -287,7 +275,7 @@
         <div class="chart-block">
           <h3>
             Trajectoires possibles
-            <span class="info-icon info-icon--sm" data-tooltip="Enveloppe de centiles (10e, 25e, médiane, 75e, 90e) des 10 000 trajectoires simulées par Monte Carlo (Mouvement Brownien Géométrique).">ⓘ</span>
+            <span class="info-icon info-icon--sm" data-tooltip="Enveloppe de percentiles (10e, 25e, médiane, 75e, 90e) des 10 000 trajectoires simulées par Monte Carlo / MBG.">ⓘ</span>
           </h3>
           <div class="chart-container">
             <canvas id="fan-chart"></canvas>
@@ -321,38 +309,19 @@
               <th scope="col">Véhicule</th>
               <th scope="col">Alloc.</th>
               <th scope="col">
-                Rdt/an
-                <span class="info-icon info-icon--sm" data-tooltip="Rendement annuel moyen paramétré dans le modèle (estimation historique). Ne constitue pas une promesse de performance.">ⓘ</span>
+                Rdt attendu
+                <span class="info-icon info-icon--sm" data-tooltip="Rendement annuel moyen (μ) paramétré dans le modèle. Ne constitue pas une promesse de performance.">ⓘ</span>
               </th>
               <th scope="col">
                 Volatilité
-                <span class="info-icon info-icon--sm" data-tooltip="Écart-type annualisé des rendements. Mesure la dispersion autour du rendement moyen — plus c'est élevé, plus le risque est fort.">ⓘ</span>
+                <span class="info-icon info-icon--sm" data-tooltip="Écart-type annualisé (σ) des rendements. Mesure la dispersion autour du rendement moyen.">ⓘ</span>
               </th>
-              <th scope="col">
-                Val. brute
-                <span class="info-icon info-icon--sm" data-tooltip="Valeur médiane simulée avant impôts et prélèvements sociaux.">ⓘ</span>
-              </th>
-              <th scope="col">
-                Gain brut
-                <span class="info-icon info-icon--sm" data-tooltip="Gain médian avant impôt = Val. brute − Capital investi dans ce support. Affiché — si négatif ou nul.">ⓘ</span>
-              </th>
-              <th scope="col">
-                Impôt est.
-                <span class="info-icon info-icon--sm" data-tooltip="Prélèvements fiscaux estimés sur le gain brut selon le véhicule et l'horizon (PFU 31,4 %, PEA 18,6 %, AV ≥ 8 ans 24,7 %, Livrets 0 %).">ⓘ</span>
-              </th>
-              <th scope="col">
-                Val. nette
-                <span class="info-icon info-icon--sm" data-tooltip="Valeur finale après impôts = Val. brute − Impôt estimé. Vérification : Total brut − Total impôt = Total net.">ⓘ</span>
-              </th>
+              <th scope="col">Valeur médiane</th>
             </tr>
           </thead>
           <tbody></tbody>
         </table>
       </div>
-    </div>
-
-    <!-- ─── Onglet 4 : Stratégie ─── -->
-    <div id="tab-strategy" class="tab-panel" role="tabpanel" aria-labelledby="tbtn-strategy" hidden>
     </div>
 
     <!-- ─── Boutons ─── -->
@@ -368,28 +337,6 @@
   <p>Simulation à titre indicatif uniquement — Pas un conseil en investissement.</p>
   <p>Modèle MBG / Monte Carlo (10 000 scénarios) — SimuPortefeuille © 2026</p>
 </footer>
-
-<!-- ── ADMIN MODAL ── -->
-<div id="admin-modal" class="modal-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="admin-modal-title">
-  <div class="modal-panel">
-    <div class="modal-header">
-      <h2 id="admin-modal-title">⚙ Administration — Sources &amp; Taux</h2>
-      <button class="modal-close" id="admin-close" aria-label="Fermer">✕</button>
-    </div>
-    <nav class="admin-tabs" role="tablist">
-      <button class="admin-tab active" role="tab" data-panel="rates">📊 Taux &amp; Charges 2026</button>
-      <button class="admin-tab" role="tab" data-panel="sources">🔗 Sources de référence</button>
-    </nav>
-    <div class="modal-body">
-      <div id="admin-rates-content" class="admin-panel-content"></div>
-      <div id="admin-sources-content" class="admin-panel-content" hidden></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-primary" id="admin-apply">✔ Appliquer</button>
-      <button class="btn btn-secondary" id="admin-reset">↺ Valeurs par défaut</button>
-    </div>
-  </div>
-</div>
 
 <script src="app.js"></script>
 </body>
