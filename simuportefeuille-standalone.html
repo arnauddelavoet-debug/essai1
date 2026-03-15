@@ -2095,6 +2095,51 @@ function renderProfileMatch(portSigma, portMu) {
   card.style.display = 'block';
 }
 
+/* ---- FORMATEURS PDF-SAFE ---- */
+/**
+ * Formateurs PDF-safe : séparateurs ASCII uniquement (pas de \u202f ni \u00a0)
+ * jsPDF avec polices Helvetica ne supporte pas les caractères Unicode avancés.
+ */
+function fmtPdf(n) {
+  if (!Number.isFinite(n)) return '-';
+  const rounded = Math.round(n);
+  const abs     = Math.abs(rounded);
+  const str     = abs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return (rounded < 0 ? '-' : '') + str + ' EUR';
+}
+
+function fmtPctPdf(p) {
+  if (!Number.isFinite(p)) return '-';
+  return (p * 100).toFixed(1) + '%';
+}
+
+/* ---- CAPTURE CHART ---- */
+/**
+ * Capture un canvas Chart.js en dataURL PNG.
+ * S'assure que le panel parent est visible si nécessaire.
+ */
+function captureChart(canvasId) {
+  try {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return null;
+
+    // Vérifier si le canvas est dans un panel caché — le révéler temporairement
+    const hiddenPanel = canvas.closest('[style*="display: none"], [style*="display:none"]');
+    let wasHidden = false;
+    if (hiddenPanel) {
+      hiddenPanel.style.display = '';
+      wasHidden = true;
+    }
+
+    const dataUrl = canvas.toDataURL('image/png', 1.0);
+
+    if (wasHidden) hiddenPanel.style.display = 'none';
+    return dataUrl;
+  } catch {
+    return null;
+  }
+}
+
 /* ---- RAPPORT PDF ---- */
 function generatePDF() {
   if (!simResults) { alert('Veuillez d\'abord lancer une simulation.'); return; }
@@ -2119,8 +2164,7 @@ function generatePDF() {
   const T   = state.horizon;
   const cap = state.capital;
 
-  // Formatteur sans séparateur de locale pour compatibilité PDF (évite '/' ou caractères unicode)
-  const fmtE  = v => { const n = Math.round(v); const s = Math.abs(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' '); return (n < 0 ? '-' : '') + s + ' EUR'; };
+  // Formatteurs PDF-safe (fmtPdf / fmtPctPdf définis globalement)
   const fmtP  = v => (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
 
   const LM = 15;   // left margin
@@ -2172,7 +2216,7 @@ function generatePDF() {
   doc.autoTable({
     startY: y,
     body: [
-      ['Capital investi', fmtE(cap)],
+      ['Capital investi', fmtPdf(cap)],
       ['Horizon de placement', T + ' an' + (T > 1 ? 's' : '')],
       ['TMI (Tranche Marginale d\'Imposition)', state.tmi + ' %'],
       ['Profil de risque', riskLabels[state.risk] || state.risk],
@@ -2201,13 +2245,13 @@ function generatePDF() {
     startY: y,
     head: [['Indicateur', 'Valeur', 'Complément']],
     body: [
-      ['Net médian après fiscalité', fmtE(netMed), fmtP((netMed - cap) / cap) + ' vs capital initial'],
-      ['Valeur médiane brute (P50)', fmtE(p50), fmtP((p50 - cap) / cap) + ' brut avant impôts'],
-      ['Scénario défavorable net (P10)', fmtE(netPess), fmtP((netPess - cap) / cap) + ' — 10 % des cas en dessous'],
-      ['Scénario pessimiste brut (P5)', fmtE(p5), '5 % des scénarios sont inférieurs'],
-      ['Scénario optimiste brut (P90)', fmtE(p90), '90 % des scénarios sont inférieurs'],
+      ['Net médian après fiscalité', fmtPdf(netMed), fmtP((netMed - cap) / cap) + ' vs capital initial'],
+      ['Valeur médiane brute (P50)', fmtPdf(p50), fmtP((p50 - cap) / cap) + ' brut avant impôts'],
+      ['Scénario défavorable net (P10)', fmtPdf(netPess), fmtP((netPess - cap) / cap) + ' — 10 % des cas en dessous'],
+      ['Scénario pessimiste brut (P5)', fmtPdf(p5), '5 % des scénarios sont inférieurs'],
+      ['Scénario optimiste brut (P90)', fmtPdf(p90), '90 % des scénarios sont inférieurs'],
       ['Probabilité de perte à l\'échéance', (lossProb * 100).toFixed(1) + ' %', 'Part des scénarios où valeur < capital'],
-      ['Total impôts estimés (médiane)', fmtE(totalTax), 'sur la plus-value médiane du portefeuille'],
+      ['Total impôts estimés (médiane)', fmtPdf(totalTax), 'sur la plus-value médiane du portefeuille'],
       ['Rendement annuel attendu', (portMu * 100).toFixed(2) + ' % / an', 'Moyenne pondérée des supports'],
       ['Volatilité annualisée', (portSigma * 100).toFixed(1) + ' % / an', 'Écart-type pondéré du portefeuille'],
     ],
@@ -2306,25 +2350,21 @@ function generatePDF() {
     const PAGE_H  = doc.internal.pageSize.getHeight(); // 297 mm
     const MARGIN_B = 15; // bottom margin
 
-    if (histCv && donutCv) {
+    const histImg  = captureChart('histChart');
+    const donutImg = captureChart('donutChart');
+
+    if (histImg && donutImg) {
       // Largeur de chaque graphique côte à côte (avec espace entre)
       const cW = 86;
       const gap = 8;
 
-      // Hauteur calculée depuis le ratio CSS (offsetWidth/Height) pour éviter distorsion
-      const hNatW = histCv.offsetWidth  || histCv.width  || 1;
-      const hNatH = histCv.offsetHeight || histCv.height || 1;
-      const dNatW = donutCv.offsetWidth  || donutCv.width  || 1;
-      const dNatH = donutCv.offsetHeight || donutCv.height || 1;
-      const histH  = Math.min(Math.round(cW * hNatH / hNatW), 80);
-      const donutH = Math.min(Math.round(cW * dNatH / dNatW), 80);
+      // Hauteur proportionnelle au canvas réel
+      const histH  = histCv ? Math.min(Math.round(cW * histCv.height / histCv.width), 80) : 55;
+      const donutH = donutCv ? Math.min(Math.round(cW * donutCv.height / donutCv.width), 80) : 55;
       const rowH   = Math.max(histH, donutH);
 
       // Vérifier l'espace disponible
       if (y + rowH + 12 > PAGE_H - MARGIN_B) { doc.addPage(); y = 20; }
-
-      const histImg  = histCv.toDataURL('image/png', 0.95);
-      const donutImg = donutCv.toDataURL('image/png', 0.95);
 
       doc.addImage(histImg,  'PNG', LM,            y, cW, histH);
       doc.addImage(donutImg, 'PNG', LM + cW + gap, y, cW, donutH);
@@ -2338,15 +2378,13 @@ function generatePDF() {
       y += rowH + 14;
     }
 
-    if (fanCv) {
+    const fanImg = captureChart('fanChart');
+    if (fanImg) {
       // Fan chart pleine largeur sur une nouvelle ligne
-      const fNatW = fanCv.offsetWidth  || fanCv.width  || 1;
-      const fNatH = fanCv.offsetHeight || fanCv.height || 1;
-      const fanH  = Math.min(Math.round(PW * fNatH / fNatW), 90);
+      const fanH  = fanCv ? Math.min(Math.round(PW * fanCv.height / fanCv.width), 90) : 65;
 
       if (y + fanH + 12 > PAGE_H - MARGIN_B) { doc.addPage(); y = 20; }
 
-      const fanImg = fanCv.toDataURL('image/png', 0.95);
       doc.addImage(fanImg, 'PNG', LM, y, PW, fanH);
 
       doc.setFontSize(6.5);
@@ -2395,22 +2433,22 @@ function generatePDF() {
     else if (v === 'AV')  regime = T >= 8 ? 'IR réduit 7,5% + PS (≥8 ans)' : 'Flat Tax 30% (<8 ans)';
     else if (v === 'CTO') regime = 'PFU 30% ou TMI+PS';
     fiscalRows.push([
-      v, regime, fmtE(d.capital),
-      fmtE(d.capital + d.grossGain),
-      d.irTax > 0 ? fmtE(d.irTax) : '—',
-      d.psTax > 0 ? fmtE(d.psTax) : '—',
-      fmtE(d.tax), fmtE(d.net),
+      v, regime, fmtPdf(d.capital),
+      fmtPdf(d.capital + d.grossGain),
+      d.irTax > 0 ? fmtPdf(d.irTax) : '—',
+      d.psTax > 0 ? fmtPdf(d.psTax) : '—',
+      fmtPdf(d.tax), fmtPdf(d.net),
     ]);
   });
   const allVehicles = Object.values(fiscalByVehicle);
   if (allVehicles.length > 1) {
     fiscalRows.push([
-      'TOTAL', '', fmtE(allVehicles.reduce((s, d) => s + d.capital, 0)),
-      fmtE(allVehicles.reduce((s, d) => s + d.capital + d.grossGain, 0)),
-      fmtE(allVehicles.reduce((s, d) => s + (d.irTax || 0), 0)),
-      fmtE(allVehicles.reduce((s, d) => s + (d.psTax || 0), 0)),
-      fmtE(allVehicles.reduce((s, d) => s + d.tax, 0)),
-      fmtE(allVehicles.reduce((s, d) => s + d.net, 0)),
+      'TOTAL', '', fmtPdf(allVehicles.reduce((s, d) => s + d.capital, 0)),
+      fmtPdf(allVehicles.reduce((s, d) => s + d.capital + d.grossGain, 0)),
+      fmtPdf(allVehicles.reduce((s, d) => s + (d.irTax || 0), 0)),
+      fmtPdf(allVehicles.reduce((s, d) => s + (d.psTax || 0), 0)),
+      fmtPdf(allVehicles.reduce((s, d) => s + d.tax, 0)),
+      fmtPdf(allVehicles.reduce((s, d) => s + d.net, 0)),
     ]);
   }
 
@@ -2450,10 +2488,10 @@ function generatePDF() {
     return [
       p.name, p.vehicleFiscal, w + ' %',
       (p.mu * 100).toFixed(1) + ' %', (p.sigma * 100).toFixed(0) + ' %',
-      fmtE(med),
-      td.irTax > 0 ? fmtE(td.irTax) : '—',
-      td.psTax > 0 ? fmtE(td.psTax) : '—',
-      fmtE(net),
+      fmtPdf(med),
+      td.irTax > 0 ? fmtPdf(td.irTax) : '—',
+      td.psTax > 0 ? fmtPdf(td.psTax) : '—',
+      fmtPdf(net),
     ];
   });
 
