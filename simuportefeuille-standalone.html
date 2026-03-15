@@ -1046,7 +1046,7 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
             <tr>
               <th>Véhicule</th>
               <th>Capital alloué</th>
-              <th>PV brute médiane</th>
+              <th>Valeur finale méd.</th>
               <th>dont IR</th>
               <th>dont PS (17,2%)</th>
               <th>Impôts totaux</th>
@@ -1096,7 +1096,7 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
               <th>Alloc. %</th>
               <th>Rdt attendu</th>
               <th>Volatilité</th>
-              <th>PV brute méd.</th>
+              <th>Valeur finale méd.</th>
               <th>dont IR</th>
               <th>dont PS (17,2%)</th>
               <th>Net récupéré</th>
@@ -1105,6 +1105,7 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
           <tbody id="detailBody"></tbody>
         </table>
       </div>
+      <div id="medianLossWarning" style="display:none;margin-top:.75rem;"></div>
     </div>
 
     <div class="nav-row">
@@ -1749,9 +1750,10 @@ function runSimulation() {
     totalNetGain += net;
 
     const v = p.vehicleFiscal;
-    if (!fiscalByVehicle[v]) fiscalByVehicle[v] = { capital:0, grossGain:0, irTax:0, psTax:0, tax:0, net:0 };
-    fiscalByVehicle[v].capital   += cap;
-    fiscalByVehicle[v].grossGain += grossGain;
+    if (!fiscalByVehicle[v]) fiscalByVehicle[v] = { capital:0, finalValue:0, grossGain:0, irTax:0, psTax:0, tax:0, net:0 };
+    fiscalByVehicle[v].capital    += cap;
+    fiscalByVehicle[v].finalValue += med;
+    fiscalByVehicle[v].grossGain  += grossGain;
     fiscalByVehicle[v].irTax     += taxDetail.irTax;
     fiscalByVehicle[v].psTax     += taxDetail.psTax;
     fiscalByVehicle[v].tax       += tax;
@@ -1850,7 +1852,7 @@ function renderResults() {
     tr.innerHTML = `
       <td>${vehicleTag(v)}</td>
       <td>${fmt(d.capital)}</td>
-      <td style="color:var(--success)">${fmt(d.capital + d.grossGain)}</td>
+      <td style="color:${d.finalValue >= d.capital ? 'var(--success)' : 'var(--danger)'}">${fmt(d.finalValue)}</td>
       <td style="color:var(--danger)">${d.irTax > 0 ? fmt(d.irTax) : '—'}</td>
       <td style="color:var(--danger)">${d.psTax > 0 ? fmt(d.psTax) : '—'}</td>
       <td style="color:var(--danger)">${fmt(d.tax)}</td>
@@ -1863,7 +1865,7 @@ function renderResults() {
   const allVehicles = Object.values(fiscalByVehicle);
   if (allVehicles.length > 1) {
     const totCap  = allVehicles.reduce((s,d)=>s+d.capital,0);
-    const totBrut = allVehicles.reduce((s,d)=>s+d.capital+d.grossGain,0);
+    const totFin  = allVehicles.reduce((s,d)=>s+d.finalValue,0);
     const totIR   = allVehicles.reduce((s,d)=>s+(d.irTax||0),0);
     const totPS   = allVehicles.reduce((s,d)=>s+(d.psTax||0),0);
     const totTax  = allVehicles.reduce((s,d)=>s+d.tax,0);
@@ -1874,7 +1876,7 @@ function renderResults() {
     trTot.innerHTML = `
       <td>Total</td>
       <td>${fmt(totCap)}</td>
-      <td style="color:var(--success)">${fmt(totBrut)}</td>
+      <td style="color:${totFin >= totCap ? 'var(--success)' : 'var(--danger)'}">${fmt(totFin)}</td>
       <td style="color:var(--danger)">${totIR > 0 ? fmt(totIR) : '—'}</td>
       <td style="color:var(--danger)">${totPS > 0 ? fmt(totPS) : '—'}</td>
       <td style="color:var(--danger)">${fmt(totTax)}</td>
@@ -1901,13 +1903,32 @@ function renderResults() {
       <td>${w} %</td>
       <td>${(p.mu*100).toFixed(1)} %</td>
       <td>${(p.sigma*100).toFixed(0)} %</td>
-      <td style="color:var(--success)">${fmt(med)}</td>
+      <td style="color:${med >= cap2 ? 'var(--success)' : 'var(--danger)'};font-weight:${med < cap2 ? '700' : 'normal'}">${fmt(med)}${med < cap2 ? ' ⚠️' : ''}</td>
       <td style="color:var(--danger)">${taxDetail.irTax > 0 ? fmt(taxDetail.irTax) : '—'}</td>
       <td style="color:var(--danger)">${taxDetail.psTax > 0 ? fmt(taxDetail.psTax) : '—'}</td>
       <td style="font-weight:700">${fmt(net)}</td>
     `;
     detailBody.appendChild(tr);
   });
+
+  /* Median loss warning */
+  const lossProducts = activeProducts.filter(p => {
+    const w2 = (state.alloc[p.id]||0);
+    const c2 = state.capital * w2 / 100;
+    return c2 > 0 && productMedians[p.id] < c2;
+  });
+  const warnDiv = document.getElementById('medianLossWarning');
+  if (lossProducts.length > 0) {
+    const names = lossProducts.map(p => `<strong>${p.icon} ${p.name}</strong>`).join(', ');
+    warnDiv.style.display = 'block';
+    warnDiv.innerHTML = `<div class="alert alert-warning">
+      <strong>⚠️ Perte en scénario central (médiane)</strong><br>
+      ${names} affiche${lossProducts.length > 1 ? 'nt' : ''} une valeur finale médiane <em>inférieure au capital investi</em> — c'est une perte dans le scénario central. Ce résultat est cohérent avec la forte volatilité du support : la médiane d'un MBG à fort σ est structurellement inférieure à la moyenne arithmétique. Considérez cela comme un avertissement fort sur la pondération attribuée à ce support.
+    </div>`;
+  } else {
+    warnDiv.style.display = 'none';
+    warnDiv.innerHTML = '';
+  }
 
   /* Profile match */
   renderProfileMatch(portSigma, portMu);
@@ -2434,7 +2455,7 @@ function generatePDF() {
     else if (v === 'CTO') regime = 'PFU 30% ou TMI+PS';
     fiscalRows.push([
       v, regime, fmtPdf(d.capital),
-      fmtPdf(d.capital + d.grossGain),
+      fmtPdf(d.finalValue),
       d.irTax > 0 ? fmtPdf(d.irTax) : '—',
       d.psTax > 0 ? fmtPdf(d.psTax) : '—',
       fmtPdf(d.tax), fmtPdf(d.net),
@@ -2444,7 +2465,7 @@ function generatePDF() {
   if (allVehicles.length > 1) {
     fiscalRows.push([
       'TOTAL', '', fmtPdf(allVehicles.reduce((s, d) => s + d.capital, 0)),
-      fmtPdf(allVehicles.reduce((s, d) => s + d.capital + d.grossGain, 0)),
+      fmtPdf(allVehicles.reduce((s, d) => s + d.finalValue, 0)),
       fmtPdf(allVehicles.reduce((s, d) => s + (d.irTax || 0), 0)),
       fmtPdf(allVehicles.reduce((s, d) => s + (d.psTax || 0), 0)),
       fmtPdf(allVehicles.reduce((s, d) => s + d.tax, 0)),
@@ -2454,7 +2475,7 @@ function generatePDF() {
 
   doc.autoTable({
     startY: y,
-    head: [['Véhicule', 'Régime fiscal', 'Capital', 'PV brute méd.', 'dont IR', 'dont PS', 'Total impôts', 'Net récupéré']],
+    head: [['Véhicule', 'Régime fiscal', 'Capital', 'Val. fin. med.', 'dont IR', 'dont PS', 'Total impôts', 'Net récupéré']],
     body: fiscalRows,
     margin: { left: LM },
     tableWidth: PW,
@@ -2497,7 +2518,7 @@ function generatePDF() {
 
   doc.autoTable({
     startY: y,
-    head: [['Support', 'Véhicule', 'Alloc.', 'Rdt moy.', 'Vol. ann.', 'PV brute méd.', 'dont IR', 'dont PS', 'Net récupéré']],
+    head: [['Support', 'Véhicule', 'Alloc.', 'Rdt moy.', 'Vol. ann.', 'Val. fin. med.', 'dont IR', 'dont PS', 'Net récupéré']],
     body: detailRows,
     margin: { left: LM },
     tableWidth: PW,
@@ -2506,7 +2527,35 @@ function generatePDF() {
     alternateRowStyles: { fillColor: [...CREAM] },
     columnStyles: { 0: { cellWidth: 52, fontSize: 6.8 }, 1: { cellWidth: 16 }, 2: { cellWidth: 13 } },
   });
-  y = doc.lastAutoTable.finalY + 10;
+  y = doc.lastAutoTable.finalY + 4;
+
+  // Warn about products with median loss
+  const lossProd = activeProducts.filter(p => {
+    const w2 = (state.alloc[p.id] || 0);
+    const c2 = cap * w2 / 100;
+    return c2 > 0 && productMedians[p.id] < c2;
+  });
+  if (lossProd.length > 0) {
+    if (y > 250) { doc.addPage(); y = 20; }
+    doc.setFillColor(253, 248, 240);
+    doc.setDrawColor(192, 124, 26);
+    const warnNames = lossProd.map(p => p.name).join(', ');
+    const warnText = doc.splitTextToSize(
+      'AVERTISSEMENT -- Perte en scenario central (mediane) : ' + warnNames +
+      ' affiche une valeur finale mediane inferieure au capital investi. Ce resultat est coherent avec la forte volatilite du support (MBG). Il doit etre interprete comme un signal fort : en scenario central, cet investissement est en perte. La probabilite de perte totale est par ailleurs sous-estimee par le MBG (queues de distribution sous-evaluees).',
+      PW - 6
+    );
+    doc.roundedRect(LM, y, PW, warnText.length * 3.6 + 6, 1.5, 1.5, 'FD');
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(192, 124, 26);
+    doc.text(warnText, LM + 3, y + 4.5);
+    y += warnText.length * 3.6 + 10;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(45, 45, 55);
+  } else {
+    y += 6;
+  }
 
   /* ── MÉTHODOLOGIE ── */
   if (y > 210) { doc.addPage(); y = 20; }
