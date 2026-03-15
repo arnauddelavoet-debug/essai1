@@ -25,6 +25,7 @@ const PRODUCTS = [
     icon: '🏦',
     mu: 0.03,
     sigma: 0.0,
+    ter: 0,
     guaranteed: true,
     minHorizon: 0,
     riskProfile: ['conservateur', 'modere', 'dynamique'],
@@ -38,6 +39,7 @@ const PRODUCTS = [
     icon: '💚',
     mu: 0.03,
     sigma: 0.0,
+    ter: 0,
     guaranteed: true,
     minHorizon: 0,
     riskProfile: ['conservateur', 'modere', 'dynamique'],
@@ -51,10 +53,11 @@ const PRODUCTS = [
     icon: '🔒',
     mu: 0.025,
     sigma: 0.004,
+    ter: 0.006,   // frais de gestion AV ~0,6 %/an
     guaranteed: false,
     minHorizon: 3,
     riskProfile: ['conservateur', 'modere'],
-    description: 'Capital quasi-garanti, rendement net ~2–2,5 % selon contrat.',
+    description: 'Capital quasi-garanti, rendement net ~2–2,5 % selon contrat (après frais AV ~0,6 %/an).',
   },
   {
     id: 'obligations-etat',
@@ -64,10 +67,11 @@ const PRODUCTS = [
     icon: '🏛️',
     mu: 0.038,
     sigma: 0.06,
+    ter: 0.001,   // TER ETF oblig. ~0,1 %/an
     guaranteed: false,
     minHorizon: 2,
     riskProfile: ['conservateur', 'modere'],
-    description: 'Obligations souveraines européennes, faible risque, rendement ~3,5–4 %.',
+    description: 'Obligations souveraines européennes, faible risque, rendement ~3,5–4 % (TER ~0,1 %/an).',
   },
   {
     id: 'scpi',
@@ -77,10 +81,11 @@ const PRODUCTS = [
     icon: '🏢',
     mu: 0.045,
     sigma: 0.07,
+    ter: 0.010,   // frais de gestion SCPI ~1 %/an
     guaranteed: false,
     minHorizon: 8,
     riskProfile: ['conservateur', 'modere', 'dynamique'],
-    description: 'Société civile de placement immobilier, rendement cible ~4–5 %.',
+    description: 'Société civile de placement immobilier, rendement cible ~4–5 % (frais gestion ~1 %/an).',
   },
   {
     id: 'uc-oblig',
@@ -90,10 +95,11 @@ const PRODUCTS = [
     icon: '📄',
     mu: 0.04,
     sigma: 0.08,
+    ter: 0.006,   // frais UC + frais AV ~0,6 %/an
     guaranteed: false,
     minHorizon: 3,
     riskProfile: ['conservateur', 'modere'],
-    description: "UC investies en obligations d'entreprises, rendement ~3,5–4,5 %.",
+    description: "UC investies en obligations d'entreprises, rendement ~3,5–4,5 % (frais UC + AV ~0,6 %/an).",
   },
   {
     id: 'etf-europe',
@@ -103,10 +109,11 @@ const PRODUCTS = [
     icon: '🇪🇺',
     mu: 0.07,
     sigma: 0.17,
+    ter: 0.002,   // TER ETF Europe ~0,2 %/an
     guaranteed: false,
     minHorizon: 5,
     riskProfile: ['modere', 'dynamique'],
-    description: 'Indice Euro Stoxx 600, exposition actions européennes diversifiées.',
+    description: 'Indice Euro Stoxx 600, exposition actions européennes diversifiées (TER ~0,2 %/an).',
   },
   {
     id: 'etf-monde',
@@ -116,10 +123,11 @@ const PRODUCTS = [
     icon: '🌍',
     mu: 0.075,
     sigma: 0.16,
+    ter: 0.0015,  // TER ETF Monde ~0,15 %/an
     guaranteed: false,
     minHorizon: 5,
     riskProfile: ['modere', 'dynamique'],
-    description: 'Exposition mondiale ~1 600 sociétés, moteur de performance long terme.',
+    description: 'Exposition mondiale ~1 600 sociétés, moteur de performance long terme (TER ~0,15 %/an).',
   },
   {
     id: 'etf-emergents',
@@ -129,10 +137,11 @@ const PRODUCTS = [
     icon: '🌏',
     mu: 0.085,
     sigma: 0.22,
+    ter: 0.004,   // TER ETF Émergents ~0,4 %/an
     guaranteed: false,
     minHorizon: 7,
     riskProfile: ['dynamique'],
-    description: 'Asie, Amérique Latine, Moyen-Orient : fort potentiel, haute volatilité.',
+    description: 'Asie, Amérique Latine, Moyen-Orient : fort potentiel, haute volatilité (TER ~0,4 %/an).',
   },
   {
     id: 'uc-actions',
@@ -142,23 +151,25 @@ const PRODUCTS = [
     icon: '📈',
     mu: 0.07,
     sigma: 0.16,
+    ter: 0.007,   // frais UC + frais AV ~0,7 %/an
     guaranteed: false,
     minHorizon: 5,
     riskProfile: ['modere', 'dynamique'],
-    description: "Unités de compte en actions mondiales au sein d'une assurance-vie.",
+    description: "Unités de compte en actions mondiales au sein d'une assurance-vie (frais UC + AV ~0,7 %/an).",
   },
   {
     id: 'crypto-btc',
-    name: 'Cryptomonnaies (panier)',
+    name: 'Cryptomonnaies (panier) ⚠️ Satellite',
     vehicle: 'CTO',
     vehicleLabel: 'CTO',
     icon: '₿',
     mu: 0.12,
     sigma: 0.60,
+    ter: 0,        // frais variables non modélisables
     guaranteed: false,
     minHorizon: 5,
     riskProfile: ['dynamique'],
-    description: 'BTC/ETH — très haute volatilité, risque de perte totale, potentiel élevé.',
+    description: 'BTC/ETH — POCHE SATELLITE SPÉCULATIVE. Drawdowns historiques : -84 % (2018), -77 % (2022). Risque de perte totale. À exclure d\'un profil modéré.',
   },
 ];
 
@@ -357,7 +368,8 @@ function renderProducts() {
     card.setAttribute('role', 'listitem');
 
     // Stat pills (données issues de constantes — pas d'input utilisateur)
-    const pillReturn = `<span class="stat-pill return">~${(p.mu * 100).toFixed(1)}\u202f%/an</span>`;
+    const muNetDisplay = p.mu - (p.ter || 0);
+    const pillReturn = `<span class="stat-pill return">~${(muNetDisplay * 100).toFixed(1)}\u202f%/an net</span>`;
     const pillVol    = p.sigma > 0 ? `<span class="stat-pill vol">σ\u202f${(p.sigma * 100).toFixed(0)}\u202f%</span>` : '';
     const pillGuar   = p.guaranteed ? '<span class="stat-pill guaranteed">Garanti</span>' : '';
     const pillMin    = !eligible ? `<span class="stat-pill min-hor">Horizon min.\u202f${p.minHorizon}\u202fans</span>` : '';
@@ -452,6 +464,43 @@ function validateAllocations() {
   return true;
 }
 
+/** IDs des actifs considérés comme "actions" pour l'analyse horizon */
+const EQUITY_IDS = ['etf-europe', 'etf-monde', 'etf-emergents', 'uc-actions'];
+
+/**
+ * Contrôles qualitatifs d'adéquation portefeuille / profil.
+ * Retourne un tableau de messages d'avertissement (vide si tout est OK).
+ */
+function qualitativeWarnings(allocations, risk, horizon) {
+  const warnings = [];
+
+  // Crypto hors profil dynamique
+  const cryptoPct = allocations['crypto-btc'] || 0;
+  if (cryptoPct > 0 && risk !== 'dynamique') {
+    warnings.push(
+      `⚠️ Crypto ${cryptoPct}\u202f% dans un profil ${risk} : poche satellite spéculative inadaptée. ` +
+      'Drawdowns historiques BTC/ETH : -84 % (2018), -77 % (2022). Envisagez de la retirer ou de choisir le profil Dynamique.'
+    );
+  }
+
+  // Exposition actions trop élevée pour l'horizon
+  const equityPct = EQUITY_IDS.reduce((sum, id) => sum + (allocations[id] || 0), 0);
+  if (horizon < 5 && equityPct > 50) {
+    warnings.push(
+      `⚠️ Exposition actions ${equityPct}\u202f% pour un horizon de ${horizon}\u202fan${horizon > 1 ? 's' : ''} : ` +
+      'risque de ne pas avoir le temps d\'attendre un rebond après un choc de marché (-25 à -35 %). ' +
+      'Règle empirique : ≤ 40–50 % d\'actions à horizon < 5 ans.'
+    );
+  } else if (horizon < 3 && equityPct > 30) {
+    warnings.push(
+      `⚠️ Exposition actions ${equityPct}\u202f% pour un horizon très court (${horizon}\u202fan${horizon > 1 ? 's' : ''}) : ` +
+      'fortement déconseillé. Privilégiez des produits garantis ou à faible volatilité.'
+    );
+  }
+
+  return warnings;
+}
+
 // ----------------------------------------------------------------
 // 8. MOTEUR MONTE CARLO — MBG
 // ----------------------------------------------------------------
@@ -493,23 +542,53 @@ function simulatePath(capital, mu, sigma, horizon, mensuel) {
 }
 
 /**
+ * Matrice de corrélation partielle entre actifs risqués.
+ * Les paires absentes ont ρ = 0 (actifs décorrélés).
+ * Sources : données historiques 10 ans, Morningstar / Bloomberg.
+ */
+const CORRELATIONS = {
+  'etf-europe':    { 'etf-monde': 0.85, 'etf-emergents': 0.65, 'uc-actions': 0.80, 'crypto-btc': 0.15 },
+  'etf-monde':     { 'etf-europe': 0.85, 'etf-emergents': 0.70, 'uc-actions': 0.90, 'crypto-btc': 0.15 },
+  'etf-emergents': { 'etf-europe': 0.65, 'etf-monde': 0.70, 'uc-actions': 0.65, 'crypto-btc': 0.20 },
+  'uc-actions':    { 'etf-europe': 0.80, 'etf-monde': 0.90, 'etf-emergents': 0.65, 'crypto-btc': 0.15 },
+  'crypto-btc':    { 'etf-europe': 0.15, 'etf-monde': 0.15, 'etf-emergents': 0.20, 'uc-actions': 0.15 },
+  'obligations-etat': { 'etf-europe': -0.10, 'etf-monde': -0.10, 'etf-emergents': -0.05 },
+  'scpi':          { 'etf-europe': 0.30, 'etf-monde': 0.25, 'etf-emergents': 0.20 },
+};
+
+/** Retourne ρ(i,j) depuis la matrice de corrélation (symétrique). */
+function getRho(idA, idB) {
+  if (idA === idB) return 1;
+  return (CORRELATIONS[idA] && CORRELATIONS[idA][idB]) ||
+         (CORRELATIONS[idB] && CORRELATIONS[idB][idA]) ||
+         0;
+}
+
+/**
  * Calcule les paramètres μ et σ du portefeuille mixte.
- * σ_P = √(Σ (w_i · σ_i)²)  — indépendance des actifs (borne haute du risque réel).
+ * μ_P = Σ wᵢ (μᵢ − TERᵢ)
+ * σ_P = √(Σᵢ Σⱼ wᵢ wⱼ ρᵢⱼ σᵢ σⱼ)  — matrice de covariance partielle.
  */
 function blendedParams(allocations) {
   let mu   = 0;
   let varP = 0;
 
-  for (const [id, pct] of Object.entries(allocations)) {
-    if (!pct) continue;
-    const w = pct / 100;
-    const p = PRODUCTS.find(x => x.id === id);
-    if (!p) continue;
-    mu   += w * p.mu;
-    varP += (w * p.sigma) ** 2;
+  const active = Object.entries(allocations)
+    .filter(([, pct]) => pct)
+    .map(([id, pct]) => ({ id, w: pct / 100, p: PRODUCTS.find(x => x.id === id) }))
+    .filter(({ p }) => p);
+
+  for (const { w, p } of active) {
+    mu += w * (p.mu - (p.ter || 0));  // μ net de frais
   }
 
-  return { mu, sigma: Math.sqrt(varP) };
+  for (const { id: idA, w: wA, p: pA } of active) {
+    for (const { id: idB, w: wB, p: pB } of active) {
+      varP += wA * wB * getRho(idA, idB) * pA.sigma * pB.sigma;
+    }
+  }
+
+  return { mu, sigma: Math.sqrt(Math.max(0, varP)) };
 }
 
 /** Retourne le percentile p (0–100) d'un tableau trié croissant */
@@ -821,7 +900,8 @@ function renderTable(capital, horizon, mensuel) {
     if (!p) continue;
 
     const w = pct / 100;
-    const { p50 } = singleProductSim(capital * w, p.mu, p.sigma, horizon, mensuel * w);
+    const muNet = p.mu - (p.ter || 0);
+    const { p50 } = singleProductSim(capital * w, muNet, p.sigma, horizon, mensuel * w);
 
     const tr = document.createElement('tr');
 
@@ -829,7 +909,7 @@ function renderTable(capital, horizon, mensuel) {
       () => { const td = document.createElement('td'); const b = document.createElement('b'); b.textContent = `${p.icon} ${p.name}`; td.appendChild(b); return td; },
       () => { const td = document.createElement('td'); const sp = document.createElement('span'); sp.className = `product-vehicle ${vehicleClass(p.vehicle)}`; sp.textContent = p.vehicleLabel; td.appendChild(sp); return td; },
       () => { const td = document.createElement('td'); td.textContent = `${pct}\u202f%`; return td; },
-      () => { const td = document.createElement('td'); td.textContent = fmtPct(p.mu); return td; },
+      () => { const td = document.createElement('td'); td.textContent = fmtPct(muNet); return td; },
       () => { const td = document.createElement('td'); td.textContent = fmtPct(p.sigma); return td; },
       () => { const td = document.createElement('td'); td.textContent = fmt(p50); return td; },
     ];
@@ -881,13 +961,19 @@ function renderExplainer(probLoss, probLossInvested, mu, sigma) {
   p.textContent = lvl.advice;
   container.appendChild(p);
 
+  // Inflation
+  const INFLATION = 0.022;
+  const realReturn = mu - INFLATION;
+  const realP50 = capital * Math.pow(1 + realReturn, horizon);
+
   const items = [
     `Probabilité de ne pas récupérer le capital initial (${fmt(capital)}) : ${fmtPct(probLoss)}`,
     `Probabilité de ne pas récupérer le total investi (${fmt(totalInvested)}) : ${fmtPct(probLossInvested)}`,
-    `Rendement annuel moyen (μ) : ${fmtPct(mu)}`,
-    `Volatilité annuelle globale (σ) : ${fmtPct(sigma)}`,
-    `Fourchette à ${horizon} ans : de ${fmt(p10)} (pessimiste) à ${fmt(p90)} (optimiste) — médiane ${fmt(p50)}`,
-    `Méthode : Mouvement Brownien Géométrique, ${N_SIMS.toLocaleString('fr-FR')} scénarios.`,
+    `Rendement annuel moyen net de frais (μ) : ${fmtPct(mu)}`,
+    `Volatilité annuelle globale (σ, corrélations intégrées) : ${fmtPct(sigma)}`,
+    `Fourchette nominale à ${horizon} ans : de ${fmt(p10)} (pessimiste P10) à ${fmt(p90)} (optimiste P90) — médiane ${fmt(p50)}`,
+    `Valeur médiane estimée en euros constants 2026 (inflation ~2,2 %/an) : ${fmt(realP50)}`,
+    `Méthode : MBG, ${N_SIMS.toLocaleString('fr-FR')} scénarios, corrélations entre ETF actions modélisées.`,
   ];
 
   const ul = document.createElement('ul');
@@ -897,6 +983,19 @@ function renderExplainer(probLoss, probLossInvested, mu, sigma) {
     ul.appendChild(li);
   });
   container.appendChild(ul);
+
+  // Avertissements qualitatifs
+  const qWarns = qualitativeWarnings(state.allocations, state.risk, horizon);
+  if (qWarns.length > 0) {
+    const warnBox = document.createElement('div');
+    warnBox.className = 'qualitative-warnings';
+    qWarns.forEach(msg => {
+      const p = document.createElement('p');
+      p.textContent = msg;
+      warnBox.appendChild(p);
+    });
+    container.appendChild(warnBox);
+  }
 }
 
 // ----------------------------------------------------------------
@@ -1257,26 +1356,33 @@ async function generatePDF() {
         const p = PRODUCTS.find(x => x.id === id);
         if (!p) return null;
         const w = pct / 100;
-        const { p50: med } = singleProductSim(capital * w, p.mu, p.sigma, horizon, mensuel * w);
-        return [p.name, p.vehicleLabel, `${pct} %`, fmtPct(p.mu), fmtPct(p.sigma), fmt(med)];
+        const muNet = p.mu - (p.ter || 0);
+        const { p50: med } = singleProductSim(capital * w, muNet, p.sigma, horizon, mensuel * w);
+        return [
+          p.name, p.vehicleLabel, `${pct} %`,
+          fmtPct(p.mu), fmtPct(p.ter || 0), fmtPct(muNet),
+          fmtPct(p.sigma), fmt(med),
+        ];
       })
       .filter(Boolean);
 
     doc.autoTable({
       startY: y,
-      head: [['Support', 'Véhicule', 'Alloc.', 'Rdt μ', 'Vol. σ', 'Val. médiane']],
+      head: [['Support', 'Véhicule', 'Alloc.', 'Rdt brut', 'Frais TER', 'Rdt net', 'Vol. σ', 'Val. finale médiane']],
       body: detailRows,
       theme: 'grid',
-      headStyles:   { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
-      bodyStyles:   { fontSize: 7.5, textColor: TEXT },
+      headStyles:   { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 7 },
+      bodyStyles:   { fontSize: 7, textColor: TEXT },
       alternateRowStyles: { fillColor: LIGHT },
       columnStyles: {
-        0: { cellWidth: 58 },
-        1: { cellWidth: 30 },
-        2: { cellWidth: 18, halign: 'center' },
-        3: { cellWidth: 20, halign: 'center' },
-        4: { cellWidth: 20, halign: 'center' },
-        5: { cellWidth: 28, halign: 'right' },
+        0: { cellWidth: 46 },
+        1: { cellWidth: 24 },
+        2: { cellWidth: 14, halign: 'center' },
+        3: { cellWidth: 18, halign: 'center' },
+        4: { cellWidth: 16, halign: 'center' },
+        5: { cellWidth: 16, halign: 'center' },
+        6: { cellWidth: 16, halign: 'center' },
+        7: { cellWidth: 32, halign: 'right' },
       },
       margin: { left: ML, right: MR },
     });
@@ -1320,7 +1426,7 @@ async function generatePDF() {
       "Les performances passées ne préjugent pas des performances futures. Les projections résultent d'un modèle stochastique et ne constituent pas des garanties.",
       "Le Mouvement Brownien Géométrique suppose des rendements log-normalement distribués et une volatilité constante, ce qui représente une approximation simplifiée de la réalité des marchés.",
       "Les paramètres (μ, σ) utilisés sont des estimations basées sur des données historiques moyennes et peuvent différer significativement sur votre horizon d'investissement.",
-      "La corrélation entre actifs n'est pas modélisée dans cette version (σ_P = √Σ(w·σ)² — borne haute du risque réel).",
+      "Les corrélations entre ETF actions (MSCI World/Europe/Émergents) sont intégrées dans le calcul de σ_P via une matrice de covariance partielle. Les corrélations restantes (ex. livrets ↔ actions) sont supposées nulles.",
       "Avant toute décision d'investissement, consultez un conseiller en gestion de patrimoine (CGP) agréé par l'AMF.",
     ];
 
@@ -1333,7 +1439,43 @@ async function generatePDF() {
       margin: { left: ML, right: MR },
     });
 
-    y = doc.lastAutoTable.finalY + 10;
+    y = doc.lastAutoTable.finalY + 6;
+
+    // Avertissements qualitatifs dans le PDF
+    const qWarningsPdf = qualitativeWarnings(state.allocations, risk, horizon);
+    if (qWarningsPdf.length > 0) {
+      y = checkY(y, 12);
+      y = sectionTitle(y, 'ALERTES D\'ADÉQUATION PORTEFEUILLE / PROFIL');
+      doc.autoTable({
+        startY: y,
+        body: qWarningsPdf.map((w, i) => [`${i + 1}.`, w.replace(/^⚠️\s*/, '')]),
+        theme: 'plain',
+        headStyles: { fillColor: [253, 186, 116], textColor: TEXT, fontStyle: 'bold', fontSize: 8 },
+        bodyStyles: { fontSize: 7.5, textColor: [124, 45, 18], cellPadding: { top: 2, bottom: 2, left: 2, right: 4 }, fillColor: [255, 247, 237] },
+        columnStyles: { 0: { cellWidth: 8, fontStyle: 'bold', valign: 'top' } },
+        margin: { left: ML, right: MR },
+      });
+      y = doc.lastAutoTable.finalY + 6;
+    }
+
+    // Note inflation
+    y = checkY(y, 20);
+    const INFLATION_PDF = 0.022;
+    const realMu = mu - INFLATION_PDF;
+    const realP50pdf = capital * Math.pow(1 + realMu, horizon);
+    doc.setFillColor(...LIGHT);
+    doc.roundedRect(ML, y, CW, 16, 3, 3, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...NAVY);
+    doc.text('Note inflation (hypothèse 2,2 %/an) :', ML + 4, y + 5.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...TEXT);
+    doc.text(
+      `Valeur médiane nominale : ${fmt(p50)}  →  Valeur estimée en euros constants 2026 : ${fmt(realP50pdf)}  (gain réel : ${fmtPct((realP50pdf / capital - 1) / horizon)}/an)`,
+      ML + 4, y + 12
+    );
+    y += 22;
 
     // ── Bloc d'authenticité ───────────────────────────────────
     y = checkY(y, 50);

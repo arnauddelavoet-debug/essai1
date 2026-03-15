@@ -782,3 +782,19 @@ footer {
   .kpi-grid { grid-template-columns: 1fr; }
   .risk-cards { grid-template-columns: 1fr; }
 }
+
+/* ── AVERTISSEMENTS QUALITATIFS ───────────────────────────── */
+.qualitative-warnings {
+  margin-top: .75rem;
+  border-left: 4px solid #f97316;
+  background: #fff7ed;
+  border-radius: 0 6px 6px 0;
+  padding: .6rem .875rem;
+}
+.qualitative-warnings p {
+  margin: 0 0 .4rem;
+  font-size: .78rem;
+  color: #7c2d12;
+  line-height: 1.45;
+}
+.qualitative-warnings p:last-child { margin-bottom: 0; }
