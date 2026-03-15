@@ -190,15 +190,91 @@ const SUGGESTIONS = {
 };
 
 // ----------------------------------------------------------------
+// 1b. ALLOCATION DYNAMIQUE PAR PROFIL (avec exclusion de produits)
+// ----------------------------------------------------------------
+
+/**
+ * Calcule les allocations effectives en normalisant la suggestion
+ * du profil courant, en excluant les produits dans excludedProducts.
+ * Garantit un total de 100 % exact (ajustement sur le dernier).
+ */
+function computeEffectiveAlloc() {
+  const suggestion = SUGGESTIONS[state.risk].alloc;
+  const included   = {};
+  let total        = 0;
+
+  for (const [id, basePct] of Object.entries(suggestion)) {
+    if (!state.excludedProducts.has(id)) {
+      included[id] = basePct;
+      total       += basePct;
+    }
+  }
+
+  if (total === 0) return {};
+
+  const ids    = Object.keys(included);
+  const result = {};
+  let allocated = 0;
+
+  for (let i = 0; i < ids.length - 1; i++) {
+    result[ids[i]] = Math.round(included[ids[i]] / total * 100);
+    allocated      += result[ids[i]];
+  }
+  // Le dernier prend le reliquat pour garantir exactement 100 %
+  result[ids[ids.length - 1]] = 100 - allocated;
+  return result;
+}
+
+/**
+ * Bascule l'inclusion/exclusion d'un produit et met à jour l'affichage.
+ */
+function toggleProduct(id) {
+  if (state.excludedProducts.has(id)) {
+    state.excludedProducts.delete(id);
+  } else {
+    state.excludedProducts.add(id);
+  }
+  state.allocations = computeEffectiveAlloc();
+  updateProductCards();
+  updateTotal();
+}
+
+/**
+ * Met à jour les pourcentages et labels des cards sans re-render complet.
+ */
+function updateProductCards() {
+  const suggestion = SUGGESTIONS[state.risk].alloc;
+  for (const [id] of Object.entries(suggestion)) {
+    const card   = document.getElementById(`card-${id}`);
+    if (!card) continue;
+    const pct      = state.allocations[id] || 0;
+    const excluded = state.excludedProducts.has(id);
+
+    card.classList.toggle('active',   !excluded && pct > 0);
+    card.classList.toggle('excluded', excluded);
+
+    const pctEl = card.querySelector('.product-pct-display');
+    if (pctEl) pctEl.textContent = excluded ? '0 %' : `${pct}\u202f%`;
+
+    const btn = card.querySelector('.toggle-btn');
+    if (btn) {
+      btn.textContent              = excluded ? '+ Inclure' : '× Exclure';
+      btn.dataset.state            = excluded ? 'excluded' : 'included';
+    }
+  }
+}
+
+// ----------------------------------------------------------------
 // 2. ÉTAT GLOBAL
 // ----------------------------------------------------------------
 let state = {
-  capital:     10000,
-  horizon:     10,
-  risk:        'conservateur',
-  mensuel:     0,
-  allocations: {},
-  simResults:  null,
+  capital:          10000,
+  horizon:          10,
+  risk:             'conservateur',
+  mensuel:          0,
+  allocations:      {},
+  excludedProducts: new Set(),
+  simResults:       null,
 };
 
 /** Instances Chart.js actives — détruits avant toute recréation */
@@ -208,16 +284,33 @@ const charts = {};
 // 3. UTILITAIRES — FORMATAGE
 // ----------------------------------------------------------------
 
-/** Formate un nombre en euros (fr-FR) */
+/** Formate un nombre en euros (fr-FR) — pour l'interface web */
 function fmt(n) {
   if (!Number.isFinite(n)) return '—';
   return n.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + '\u202f€';
 }
 
-/** Formate un ratio [0..1] en pourcentage */
+/** Formate un ratio [0..1] en pourcentage — pour l'interface web */
 function fmtPct(p) {
   if (!Number.isFinite(p)) return '—';
   return (p * 100).toFixed(1) + '\u202f%';
+}
+
+/**
+ * Formateurs PDF-safe : séparateurs ASCII uniquement (pas de \u202f ni \u00a0)
+ * jsPDF avec polices Helvetica ne supporte pas les caractères Unicode avancés.
+ */
+function fmtPdf(n) {
+  if (!Number.isFinite(n)) return '-';
+  const rounded = Math.round(n);
+  const abs     = Math.abs(rounded);
+  const str     = abs.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return (rounded < 0 ? '-' : '') + str + ' EUR';
+}
+
+function fmtPctPdf(p) {
+  if (!Number.isFinite(p)) return '-';
+  return (p * 100).toFixed(1) + '%';
 }
 
 // ----------------------------------------------------------------
@@ -351,61 +444,74 @@ function renderProducts() {
   const grid    = document.getElementById('products-grid');
   grid.innerHTML = '';
 
-  // Réinitialise les allocations avec la suggestion du profil
-  state.allocations = { ...SUGGESTIONS[risk].alloc };
+  // Réinitialise les exclusions et recalcule les allocations
+  state.excludedProducts = new Set();
+  state.allocations      = computeEffectiveAlloc();
+
+  const suggestion = SUGGESTIONS[risk].alloc;
 
   PRODUCTS.forEach(p => {
-    const eligible = p.riskProfile.includes(risk) && p.minHorizon <= horizon;
-    const pct      = state.allocations[p.id] || 0;
+    const inSuggestion = p.id in suggestion;
+    // Produit éligible = dans la suggestion du profil
+    // Produit hors suggestion = affiché mais grisé (informatif)
 
     const card = document.createElement('div');
-    card.className = [
-      'product-card',
-      pct > 0 ? 'active' : '',
-      !eligible ? 'dimmed' : '',
-    ].filter(Boolean).join(' ');
-    card.id = `card-${p.id}`;
+    card.id    = `card-${p.id}`;
     card.setAttribute('role', 'listitem');
 
-    // Stat pills (données issues de constantes — pas d'input utilisateur)
     const muNetDisplay = p.mu - (p.ter || 0);
-    const pillReturn = `<span class="stat-pill return">~${(muNetDisplay * 100).toFixed(1)}\u202f%/an net</span>`;
-    const pillVol    = p.sigma > 0 ? `<span class="stat-pill vol">σ\u202f${(p.sigma * 100).toFixed(0)}\u202f%</span>` : '';
-    const pillGuar   = p.guaranteed ? '<span class="stat-pill guaranteed">Garanti</span>' : '';
-    const pillMin    = !eligible ? `<span class="stat-pill min-hor">Horizon min.\u202f${p.minHorizon}\u202fans</span>` : '';
+    const pillReturn   = `<span class="stat-pill return">~${(muNetDisplay * 100).toFixed(1)}%/an net</span>`;
+    const pillVol      = p.sigma > 0 ? `<span class="stat-pill vol">σ ${(p.sigma * 100).toFixed(0)}%</span>` : '';
+    const pillGuar     = p.guaranteed ? '<span class="stat-pill guaranteed">Garanti</span>' : '';
 
-    // Construit le contenu du card de façon sûre via DOM
-    card.innerHTML = `
-      <div class="product-header">
-        <span class="product-icon" aria-hidden="true"></span>
-        <div class="product-info">
-          <div class="product-name"></div>
-          <span class="product-vehicle ${vehicleClass(p.vehicle)}"></span>
+    if (inSuggestion) {
+      const pct = state.allocations[p.id] || 0;
+      card.className = `product-card active`;
+
+      card.innerHTML = `
+        <div class="product-header">
+          <span class="product-icon" aria-hidden="true"></span>
+          <div class="product-info">
+            <div class="product-name"></div>
+            <span class="product-vehicle ${vehicleClass(p.vehicle)}"></span>
+          </div>
         </div>
-      </div>
-      <div class="product-stats">${pillReturn}${pillVol}${pillGuar}${pillMin}</div>
-      <div class="product-pct-row">
-        <label for="pct-${p.id}">Alloc.\u202f:</label>
-        <input type="number" id="pct-${p.id}"
-               min="0" max="100" step="5" value="${pct}"
-               ${!eligible ? 'disabled aria-disabled="true"' : ''}
-               inputmode="numeric" />
-        <span class="unit">%</span>
-      </div>
-    `;
+        <div class="product-stats">${pillReturn}${pillVol}${pillGuar}</div>
+        <div class="product-pct-row">
+          <span class="alloc-label">Alloc.&nbsp;:</span>
+          <span class="product-pct-display">${pct}%</span>
+          <button type="button" class="toggle-btn" data-state="included" data-id="${p.id}">x Exclure</button>
+        </div>
+      `;
 
-    // Injection textContent (pas innerHTML) pour les données potentiellement hétérogènes
-    card.querySelector('.product-icon').textContent      = p.icon;
-    card.querySelector('.product-name').textContent      = p.name;
-    card.querySelector('.product-vehicle').textContent   = p.vehicleLabel;
+      card.querySelector('.product-icon').textContent    = p.icon;
+      card.querySelector('.product-name').textContent    = p.name;
+      card.querySelector('.product-vehicle').textContent = p.vehicleLabel;
+      card.title = p.description;
 
-    // Tooltip via attribut (pas inline style)
-    card.title = p.description;
+      card.querySelector('.toggle-btn').addEventListener('click', () => toggleProduct(p.id));
 
-    // Listener allocation
-    const input = card.querySelector(`#pct-${p.id}`);
-    input.addEventListener('input', () => updateAlloc(p.id, input.value));
-    input.addEventListener('change', () => updateAlloc(p.id, input.value));
+    } else {
+      // Hors profil — affiché en grisé, pas de toggle
+      const pillHors = `<span class="stat-pill min-hor">Hors profil ${risk}</span>`;
+      card.className = 'product-card dimmed';
+
+      card.innerHTML = `
+        <div class="product-header">
+          <span class="product-icon" aria-hidden="true"></span>
+          <div class="product-info">
+            <div class="product-name"></div>
+            <span class="product-vehicle ${vehicleClass(p.vehicle)}"></span>
+          </div>
+        </div>
+        <div class="product-stats">${pillReturn}${pillVol}${pillGuar}${pillHors}</div>
+      `;
+
+      card.querySelector('.product-icon').textContent    = p.icon;
+      card.querySelector('.product-name').textContent    = p.name;
+      card.querySelector('.product-vehicle').textContent = p.vehicleLabel;
+      card.title = p.description;
+    }
 
     grid.appendChild(card);
   });
@@ -414,20 +520,12 @@ function renderProducts() {
   updateTotal();
 }
 
-function updateAlloc(id, val) {
-  const v = Math.max(0, Math.min(100, parseFloat(val) || 0));
-  state.allocations[id] = v;
-  const card = document.getElementById(`card-${id}`);
-  if (card) card.classList.toggle('active', v > 0);
-  updateTotal();
-}
-
 function updateTotal() {
-  const total = Object.values(state.allocations).reduce((a, b) => a + b, 0);
-  const el    = document.getElementById('total-pct');
+  const total   = Object.values(state.allocations).reduce((a, b) => a + b, 0);
+  const el      = document.getElementById('total-pct');
   const rounded = Math.round(total);
-  el.textContent = `${rounded}\u202f%`;
-  el.className = `total-pct ${rounded === 100 ? 'good' : rounded > 100 ? 'over' : 'neutral'}`;
+  el.textContent = `${rounded}%`;
+  el.className = `total-pct ${rounded === 100 ? 'good' : rounded === 0 ? 'over' : 'neutral'}`;
   document.getElementById('simulate-btn').disabled = rounded !== 100;
 }
 
@@ -438,27 +536,21 @@ function updateSuggestion() {
   const bar = document.getElementById('allocation-suggestions');
   if (!bar || !s) return;
 
-  // Construction DOM sans innerHTML direct
   bar.textContent = '';
   const strong = document.createElement('strong');
-  strong.textContent = `${s.label}\u202f: `;
+  strong.textContent = `${s.label} — allocations verrouillées. `;
   bar.appendChild(strong);
-
-  Object.entries(s.alloc).forEach(([id, pct], i) => {
-    const p = PRODUCTS.find(x => x.id === id);
-    if (!p) return;
-    if (i > 0) bar.appendChild(document.createTextNode('\u00a0|\u00a0'));
-    bar.appendChild(document.createTextNode(`${p.icon} ${p.name} `));
-    const b = document.createElement('strong');
-    b.textContent = `${pct}\u202f%`;
-    bar.appendChild(b);
-  });
+  bar.appendChild(document.createTextNode('Cliquez "× Exclure" pour retirer un support (recalcul automatique).'));
 }
 
 function validateAllocations() {
   const total = Object.values(state.allocations).reduce((a, b) => a + b, 0);
+  if (Math.round(total) === 0) {
+    showError('Aucun support sélectionné — incluez au moins un produit.');
+    return false;
+  }
   if (Math.round(total) !== 100) {
-    showError(`L'allocation doit totaliser 100\u202f% (actuellement ${Math.round(total)}\u202f%).`);
+    showError(`L'allocation doit totaliser 100 % (actuellement ${Math.round(total)} %).`);
     return false;
   }
   return true;
@@ -656,9 +748,13 @@ async function runSimulation() {
       p90: pctile(sortedFinals, 90),
     };
 
-    renderResults();
-    activateTab('kpi');
+    // Aller à l'étape 3 D'ABORD pour que les canvas soient visibles
+    // avant que Chart.js mesure leurs dimensions
     goToStep(3);
+    activateTab('kpi');
+    // Donner le temps au navigateur de rendre le DOM visible
+    await new Promise(r => requestAnimationFrame(r));
+    renderResults();
 
   } catch (err) {
     // Pas d'exposition du stack trace à l'utilisateur
@@ -1015,6 +1111,19 @@ function activateTab(name) {
     panel.classList.toggle('active', show);
     if (show) panel.scrollTop = 0;
   });
+
+  // Resize charts après affichage pour éviter le scroll infini Chart.js
+  if (name === 'charts') {
+    requestAnimationFrame(() => {
+      ['fan-chart', 'dist-chart', 'donut-chart'].forEach(id => {
+        const key = id.replace('-chart', '').replace('-', '');
+        const ch  = charts[key] || charts[id.replace('-chart', '')];
+        if (ch) ch.resize();
+      });
+      // Fallback : resize tous les charts actifs
+      Object.values(charts).forEach(c => { if (c) c.resize(); });
+    });
+  }
 }
 
 // ----------------------------------------------------------------
@@ -1037,12 +1146,27 @@ async function sha256(message) {
   }
 }
 
-/** Capture un canvas Chart.js sous forme d'image PNG (data URL) */
+/**
+ * Capture un canvas Chart.js en s'assurant que son onglet parent est visible.
+ * Si nécessaire, révèle temporairement l'onglet, capture, puis masque.
+ */
 function captureChart(canvasId) {
   try {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return null;
-    return canvas.toDataURL('image/png', 0.95);
+
+    // Vérifier si le canvas est dans un panel caché — le révéler temporairement
+    const hiddenPanel = canvas.closest('.tab-panel[hidden]');
+    if (hiddenPanel) {
+      hiddenPanel.removeAttribute('hidden');
+      // Forcer le resize du chart associé
+      Object.values(charts).forEach(c => { if (c && c.canvas === canvas) c.resize(); });
+    }
+
+    const dataUrl = canvas.toDataURL('image/png', 1.0);
+
+    if (hiddenPanel) hiddenPanel.setAttribute('hidden', '');
+    return dataUrl;
   } catch {
     return null;
   }
@@ -1187,15 +1311,15 @@ async function generatePDF() {
       startY: y,
       head: [['Paramètre', 'Valeur']],
       body: [
-        ['Capital initial', fmt(capital)],
+        ['Capital initial', fmtPdf(capital)],
         ['Horizon de placement', `${horizon} ans`],
-        ['Versements mensuels', fmt(mensuel) + '/mois'],
-        ['Capital total investi', fmt(totalInvested)],
+        ['Versements mensuels', fmtPdf(mensuel) + '/mois'],
+        ['Capital total investi', fmtPdf(totalInvested)],
         ['Profil de risque', risk.charAt(0).toUpperCase() + risk.slice(1)],
-        ['Rendement annuel moyen (μ)', fmtPct(mu)],
-        ['Volatilité annuelle (σ)', fmtPct(sigma)],
+        ['Rendement annuel moyen (mu)', fmtPctPdf(mu)],
+        ['Volatilite annuelle (sigma)', fmtPctPdf(sigma)],
         ['Nombre de simulations', N_SIMS.toLocaleString('fr-FR')],
-        ['Modèle', 'Mouvement Brownien Géométrique (MBG)'],
+        ['Modele', 'Mouvement Brownien Geometrique (MBG)'],
       ],
       theme: 'grid',
       headStyles:   { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 8 },
@@ -1215,7 +1339,7 @@ async function generatePDF() {
       .filter(([, pct]) => pct > 0)
       .map(([id, pct]) => {
         const p = PRODUCTS.find(x => x.id === id);
-        return p ? [p.name, p.vehicleLabel, `${pct} %`, fmtPct(p.mu), fmtPct(p.sigma)] : null;
+        return p ? [p.name, p.vehicleLabel, `${pct}%`, fmtPctPdf(p.mu - (p.ter||0)), fmtPctPdf(p.sigma)] : null;
       })
       .filter(Boolean);
 
@@ -1242,10 +1366,10 @@ async function generatePDF() {
 
     // KPI boxes 2×2
     const kpiData = [
-      { label: 'Valeur médiane (P50)',       value: fmt(p50),         color: [8, 145, 178] },
-      { label: 'Probabilité de perte',        value: fmtPct(probLoss), color: [220, 38, 38] },
-      { label: 'Scénario optimiste (P90)',    value: fmt(p90),         color: [22, 163, 74] },
-      { label: 'Scénario pessimiste (P10)',   value: fmt(p10),         color: [217, 119, 6] },
+      { label: 'Valeur mediane (P50)',      value: fmtPdf(p50),         color: [8, 145, 178] },
+      { label: 'Probabilite de perte',      value: fmtPctPdf(probLoss), color: [220, 38, 38] },
+      { label: 'Scenario optimiste (P90)',  value: fmtPdf(p90),         color: [22, 163, 74] },
+      { label: 'Scenario pessimiste (P10)', value: fmtPdf(p10),         color: [217, 119, 6] },
     ];
 
     const bw = (CW - 6) / 2;
@@ -1274,11 +1398,11 @@ async function generatePDF() {
       startY: y,
       head: [['Percentile', 'Signification', 'Valeur finale']],
       body: [
-        ['P10', '10 % des scénarios sont inférieurs',     fmt(p10)],
-        ['P25', '25 % des scénarios sont inférieurs',     fmt(p25)],
-        ['P50', 'Médiane — résultat le plus probable',    fmt(p50)],
-        ['P75', '75 % des scénarios sont inférieurs',     fmt(p75)],
-        ['P90', '90 % des scénarios sont inférieurs',     fmt(p90)],
+        ['P10', '10% des scenarios sont inferieurs',    fmtPdf(p10)],
+        ['P25', '25% des scenarios sont inferieurs',    fmtPdf(p25)],
+        ['P50', 'Mediane - resultat le plus probable',  fmtPdf(p50)],
+        ['P75', '75% des scenarios sont inferieurs',    fmtPdf(p75)],
+        ['P90', '90% des scenarios sont inferieurs',    fmtPdf(p90)],
       ],
       theme: 'grid',
       headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 8 },
@@ -1302,8 +1426,8 @@ async function generatePDF() {
       head: [['Indicateur', 'Valeur']],
       body: [
         ['Niveau de risque global', riskLabel],
-        ["Proba. de ne pas récupérer le capital initial", fmtPct(probLoss)],
-        ["Proba. de ne pas récupérer le total investi",   fmtPct(probLossInvested)],
+        ['Proba. de ne pas recuperer le capital initial', fmtPctPdf(probLoss)],
+        ['Proba. de ne pas recuperer le total investi',   fmtPctPdf(probLossInvested)],
       ],
       theme: 'grid',
       headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 8 },
@@ -1322,23 +1446,39 @@ async function generatePDF() {
     y = 22;
     y = sectionTitle(y, 'TRAJECTOIRES — ENVELOPPE DE PERCENTILES');
 
-    const fanImg  = captureChart('fan-chart');
-    const distImg = captureChart('dist-chart');
+    // Forcer l'affichage temporaire de l'onglet Graphiques avant capture
+    const prevActiveTab = document.querySelector('.tab-btn.active')?.dataset.tab || 'kpi';
+    activateTab('charts');
+    await new Promise(r => requestAnimationFrame(r)); // laisser le DOM se mettre à jour
+
+    const fanImg   = captureChart('fan-chart');
+    const distImg  = captureChart('dist-chart');
     const donutImg = captureChart('donut-chart');
 
+    activateTab(prevActiveTab); // Restaurer l'onglet d'origine
+
     if (fanImg) {
-      doc.addImage(fanImg, 'PNG', ML, y, CW, 70);
-      y += 74;
+      // Respecter l'aspect ratio du canvas : largeur CW, hauteur proportionnelle
+      const fanCanvas = document.getElementById('fan-chart');
+      const fanH = fanCanvas ? Math.round(CW * fanCanvas.height / fanCanvas.width) : 65;
+      doc.addImage(fanImg, 'PNG', ML, y, CW, Math.min(fanH, 75));
+      y += Math.min(fanH, 75) + 4;
     }
 
     if (distImg) {
       y = checkY(y, 12);
       y = sectionTitle(y, 'DISTRIBUTION DES VALEURS FINALES (10 000 SIMULATIONS)');
-      doc.addImage(distImg, 'PNG', ML, y, CW * 0.65, 55);
+      const distCanvas = document.getElementById('dist-chart');
+      const distW = CW * 0.62;
+      const distH = distCanvas ? Math.round(distW * distCanvas.height / distCanvas.width) : 52;
+      doc.addImage(distImg, 'PNG', ML, y, distW, Math.min(distH, 60));
       if (donutImg) {
-        doc.addImage(donutImg, 'PNG', ML + CW * 0.68, y, CW * 0.32, 55);
+        const donutCanvas = document.getElementById('donut-chart');
+        const donutW = CW * 0.33;
+        const donutH = donutCanvas ? Math.round(donutW * donutCanvas.height / donutCanvas.width) : 52;
+        doc.addImage(donutImg, 'PNG', ML + CW * 0.65, y, donutW, Math.min(donutH, 60));
       }
-      y += 59;
+      y += Math.min(distCanvas ? Math.round(CW * 0.62 * distCanvas.height / distCanvas.width) : 52, 60) + 4;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1360,8 +1500,8 @@ async function generatePDF() {
         const { p50: med } = singleProductSim(capital * w, muNet, p.sigma, horizon, mensuel * w);
         return [
           p.name, p.vehicleLabel, `${pct} %`,
-          fmtPct(p.mu), fmtPct(p.ter || 0), fmtPct(muNet),
-          fmtPct(p.sigma), fmt(med),
+          fmtPctPdf(p.mu), fmtPctPdf(p.ter || 0), fmtPctPdf(muNet),
+          fmtPctPdf(p.sigma), fmtPdf(med),
         ];
       })
       .filter(Boolean);
@@ -1472,7 +1612,7 @@ async function generatePDF() {
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...TEXT);
     doc.text(
-      `Valeur médiane nominale : ${fmt(p50)}  →  Valeur estimée en euros constants 2026 : ${fmt(realP50pdf)}  (gain réel : ${fmtPct((realP50pdf / capital - 1) / horizon)}/an)`,
+      `Valeur mediane nominale : ${fmtPdf(p50)}  ->  Euros constants 2026 : ${fmtPdf(realP50pdf)}  (gain reel : ${fmtPctPdf((realP50pdf / capital - 1) / horizon)}/an)`,
       ML + 4, y + 12
     );
     y += 22;

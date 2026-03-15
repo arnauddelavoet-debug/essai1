@@ -383,14 +383,51 @@ input[type="range"] {
   display: flex;
   align-items: center;
   gap: .4rem;
+  margin-top: .35rem;
 }
 
-.product-pct-row label { font-size: .74rem; color: var(--muted); white-space: nowrap; }
+.alloc-label { font-size: .74rem; color: var(--muted); white-space: nowrap; }
 
-.product-pct-row input[type="number"] {
-  width: 58px;
-  padding: .3rem .45rem;
-  font-size: .88rem;
+.product-pct-display {
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--primary);
+  min-width: 38px;
+}
+
+/* ── TOGGLE EXCLURE/INCLURE ───────────────────────────────── */
+.toggle-btn {
+  margin-left: auto;
+  padding: .22rem .55rem;
+  border-radius: 99px;
+  border: 1.5px solid var(--danger);
+  background: transparent;
+  color: var(--danger);
+  font-size: .7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+}
+.toggle-btn:hover {
+  background: #fef2f2;
+}
+.toggle-btn[data-state="excluded"] {
+  border-color: var(--success);
+  color: var(--success);
+}
+.toggle-btn[data-state="excluded"]:hover {
+  background: #f0fdf4;
+}
+
+/* Card exclue — opacité réduite, bordure neutre */
+.product-card.excluded {
+  opacity: .55;
+  border-color: var(--border);
+  box-shadow: none;
+}
+.product-card.excluded .product-pct-display {
+  color: var(--muted);
 }
 
 /* ── TOTAL BAR ───────────────────────────────────────────── */
@@ -581,6 +618,7 @@ input[type="range"] {
   position: relative;
   width: 100%;
   height: 220px;
+  overflow: hidden;   /* empêche Chart.js de s'élargir hors conteneur */
 }
 
 .chart-container--small { height: 200px; }
