@@ -423,7 +423,66 @@ select:focus { border-color: var(--navy); }
 .etf-check-item input { cursor: pointer; accent-color: var(--navy); margin: 0; }
 .etf-hint { font-size: .76rem; color: var(--muted); margin-top: .5rem; font-style: italic; }
 
-/* ---- PRODUCTS (Step 2) ---- */
+/* ---- PRODUCT CARDS (Step 2) ---- */
+.product-pct-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-top: .5rem;
+}
+
+.alloc-label {
+  font-size: .75rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.product-pct-display {
+  font-weight: 700;
+  color: var(--navy);
+  font-size: .95rem;
+}
+
+.toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: .15rem .55rem;
+  border-radius: 50px;
+  font-size: .75rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid var(--danger);
+  color: var(--danger);
+  background: transparent;
+  font-family: var(--font);
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.toggle-btn:hover {
+  background: rgba(184,50,50,.09);
+}
+
+.toggle-btn[data-state="excluded"] {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.toggle-btn[data-state="excluded"]:hover {
+  background: rgba(45,106,79,.09);
+}
+
+.product-card.excluded {
+  opacity: 0.55;
+  border-color: var(--border);
+}
+
+.product-card.excluded .product-pct-display {
+  color: var(--muted);
+}
+
+/* ---- ALLOC TOOLBAR ---- */
 .alloc-toolbar {
   display: flex;
   align-items: center;
@@ -684,6 +743,7 @@ tbody td {
   border-radius: var(--radius);
   padding: 1rem 1.1rem;
   box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
 
 .chart-card h3 {
@@ -702,6 +762,7 @@ tbody td {
   padding: 1rem 1.1rem;
   box-shadow: var(--shadow-sm);
   margin-bottom: 1rem;
+  overflow: hidden;
 }
 .chart-full h3 {
   font-size: .8rem;
@@ -876,7 +937,10 @@ footer .footer-legal { font-size: .7rem; color: rgba(255,255,255,.4); margin-top
   <div class="step-panel" id="panel2">
     <div class="card">
       <h2>Allocation du portefeuille</h2>
-      <div class="hint">Sélectionnez vos ETF ci-dessous, puis répartissez l'allocation. Le total doit être égal à 100 %.</div>
+      <p class="hint">
+  Les allocations sont pré-configurées selon votre profil. Excluez un support pour redistribuer automatiquement son allocation.
+  <span class="info-icon" data-tooltip="Les pourcentages sont calculés automatiquement selon le profil choisi. Cliquez sur '× Exclure' pour retirer un support — les autres sont recalculés proportionnellement.">ⓘ</span>
+</p>
 
       <!-- ETF Selector -->
       <div class="etf-selector" id="etfSelectorPanel">
@@ -1154,6 +1218,7 @@ let state = {
   risk: 'modere',
   alloc: {},          // productId -> %
   suggestionActive: false, // true si l'allocation actuelle vient de applySuggestion
+  excludedProducts: new Set(),
 };
 
 let charts = {};
