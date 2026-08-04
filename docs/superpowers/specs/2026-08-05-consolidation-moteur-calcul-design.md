@@ -75,4 +75,4 @@ Cet outillage pose également les bases nécessaires pour l'empaquetage desktop 
 - Auditabilité et conformité réglementaire renforcées (traçabilité, journalisation).
 - Mode de conseil guidé façon CGP pour utilisateur néophyte.
 - Refonte UX/UI.
-- Empaquetage desktop (`.app` / `.exe`).
+- Empaquetage desktop (`.app` / `.exe`) : volontairement différé — à reprendre uniquement une fois qu'une version web stable (base modulaire unique, moteur de calcul corrigé) sera en place. Ce projet prépare seulement le terrain (voir section Tests) sans engager le travail d'empaquetage lui-même.
