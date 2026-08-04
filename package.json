@@ -1,0 +1,13 @@
+{
+  "name": "simuportefeuille",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Simulateur Monte Carlo de portefeuille financier — moteur de calcul et interface web statique.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}
