@@ -161,7 +161,7 @@ export function resizeCharts() {
   Object.values(charts).forEach(c => { if (c) c.resize(); });
 }
 
-/** Retourne le canvas d'un chart Chart.js actif par son id de dataset (pour capture PDF). */
+/** Retourne l'instance Chart.js active pour une clé donnée (gauge/dist/fan/donut), ou null si aucun chart n'est actif sous cette clé. */
 export function getChartInstance(key) {
   return charts[key] || null;
 }
