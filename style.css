@@ -263,6 +263,23 @@ input[type="range"] {
   height: 4px;
 }
 
+select {
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: .4rem .65rem;
+  font-size: .95rem;
+  outline: none;
+  color: var(--text);
+  background: var(--surface);
+  transition: border-color .2s;
+  width: 100%;
+}
+select:focus { border-color: var(--primary); }
+
+.table-wrap--spaced {
+  margin-top: 1.5rem;
+}
+
 /* ── RISK CARDS ──────────────────────────────────────────── */
 .risk-cards {
   display: grid;
