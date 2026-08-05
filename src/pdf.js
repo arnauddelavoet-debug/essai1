@@ -196,6 +196,11 @@ export async function generatePDF() {
     });
     y += 2 * (bh + 4) + 8;
 
+    const realNetP50 = netP50 / Math.pow(1 + INFLATION, horizon);
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(...MUTED);
+    doc.text(`Valeur nette médiane en euros constants (inflation ~2,2 %/an) : ${fmtPdf(realNetP50)}`, ML, y);
+    y += 6;
+
     y = checkY(y, 12);
     y = sectionTitle(y, 'DISTRIBUTION DES PERCENTILES BRUTS (AVANT IMPÔTS)');
     doc.autoTable({
@@ -310,6 +315,14 @@ export async function generatePDF() {
     y += nonAddNote.length * 3.5 + 6;
 
     y = checkY(y, 12);
+    doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(...MUTED);
+    const fiscalNonAddNote = doc.splitTextToSize(
+      'Valeurs medianes indicatives par vehicule, issues de la meme simulation jointe. Leur somme ne correspond pas exactement a la mediane globale du portefeuille (propriete statistique normale).',
+      CW
+    );
+    doc.text(fiscalNonAddNote, ML, y);
+    y += fiscalNonAddNote.length * 3.5 + 4;
+
     y = sectionTitle(y, 'RÉPARTITION FISCALE PAR VÉHICULE (VALEURS MÉDIANES)');
     const fiscalRows = [];
     for (const v of ['Livret', 'PEA', 'AV', 'CTO']) {
