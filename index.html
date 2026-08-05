@@ -161,6 +161,20 @@
       </div>
     </div>
 
+    <div class="form-group">
+      <label for="tmi">
+        Tranche Marginale d'Imposition (TMI)
+        <span class="info-icon" data-tooltip="Votre taux d'imposition sur le revenu le plus élevé. Utilisé pour estimer la fiscalité applicable aux plus-values (CTO, assurance-vie après 8 ans).">ⓘ</span>
+      </label>
+      <select id="tmi" aria-label="Tranche marginale d'imposition">
+        <option value="0">0 % (non imposable)</option>
+        <option value="11">11 %</option>
+        <option value="30" selected>30 %</option>
+        <option value="41">41 %</option>
+        <option value="45">45 %</option>
+      </select>
+    </div>
+
     <div class="btn-row">
       <button class="btn btn-primary" id="btn-step1-next">Suivant →</button>
     </div>
@@ -322,6 +336,27 @@
           <tbody></tbody>
         </table>
       </div>
+
+      <div class="table-wrap table-wrap--spaced">
+        <p class="hint">
+          Répartition fiscale par véhicule — valeurs médianes indicatives issues de la même simulation ;
+          leur somme ne correspond pas exactement à la médiane globale du portefeuille (propriété statistique normale).
+        </p>
+        <table class="detail-table" id="fiscal-table" aria-label="Répartition fiscale par véhicule d'investissement">
+          <thead>
+            <tr>
+              <th scope="col">Véhicule</th>
+              <th scope="col">Capital investi</th>
+              <th scope="col">Valeur finale méd.</th>
+              <th scope="col">dont IR</th>
+              <th scope="col">dont PS</th>
+              <th scope="col">Total impôts</th>
+              <th scope="col">Net récupéré</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- ─── Boutons ─── -->
@@ -338,6 +373,6 @@
   <p>Modèle MBG / Monte Carlo (10 000 scénarios) — SimuPortefeuille © 2026</p>
 </footer>
 
-<script src="app.js"></script>
+<script type="module" src="src/main.js"></script>
 </body>
 </html>
