@@ -60,7 +60,7 @@ function updateProductCards() {
     card.classList.toggle('excluded', excluded);
 
     const pctEl = card.querySelector('.product-pct-display');
-    if (pctEl) pctEl.textContent = excluded ? '0 %' : `${pct} %`;
+    if (pctEl) pctEl.textContent = excluded ? '0 %' : `${pct} %`;
 
     const btn = card.querySelector('.toggle-btn');
     if (btn) {
@@ -184,8 +184,8 @@ function renderProducts() {
     card.setAttribute('role', 'listitem');
 
     const muNetDisplay = p.mu - (p.ter || 0);
-    const pillReturn = `<span class="stat-pill return">~${(muNetDisplay * 100).toFixed(1)}%/an net</span>`;
-    const pillVol = p.sigma > 0 ? `<span class="stat-pill vol">σ ${(p.sigma * 100).toFixed(0)}%</span>` : '';
+    const pillReturn = `<span class="stat-pill return">~${(muNetDisplay * 100).toFixed(1)} %/an net</span>`;
+    const pillVol = p.sigma > 0 ? `<span class="stat-pill vol">σ ${(p.sigma * 100).toFixed(0)} %</span>` : '';
     const pillGuar = p.guaranteed ? '<span class="stat-pill guaranteed">Garanti</span>' : '';
 
     if (inSuggestion) {
@@ -202,7 +202,7 @@ function renderProducts() {
         <div class="product-stats">${pillReturn}${pillVol}${pillGuar}</div>
         <div class="product-pct-row">
           <span class="alloc-label">Alloc.&nbsp;:</span>
-          <span class="product-pct-display">${pct}%</span>
+          <span class="product-pct-display">${pct} %</span>
           <button type="button" class="toggle-btn" data-state="included" data-id="${p.id}">x Exclure</button>
         </div>
       `;
@@ -241,7 +241,7 @@ function updateTotal() {
   const total = Object.values(state.allocations).reduce((a, b) => a + b, 0);
   const el = document.getElementById('total-pct');
   const rounded = Math.round(total);
-  el.textContent = `${rounded}%`;
+  el.textContent = `${rounded} %`;
   el.className = `total-pct ${rounded === 100 ? 'good' : rounded === 0 ? 'over' : 'neutral'}`;
   document.getElementById('simulate-btn').disabled = rounded !== 100;
 }
@@ -267,7 +267,7 @@ function validateAllocations() {
     return false;
   }
   if (Math.round(total) !== 100) {
-    showError(`L'allocation doit totaliser 100 % (actuellement ${Math.round(total)} %).`);
+    showError(`L'allocation doit totaliser 100 % (actuellement ${Math.round(total)} %).`);
     return false;
   }
   return true;
@@ -279,21 +279,21 @@ function qualitativeWarnings(allocations, risk, horizon, portSigma) {
   const cryptoPct = allocations['crypto-btc'] || 0;
   if (cryptoPct > 0 && risk !== 'dynamique') {
     warnings.push(
-      `⚠️ Crypto ${cryptoPct} % dans un profil ${risk} : poche satellite spéculative inadaptée. ` +
-      'Drawdowns historiques BTC/ETH : -84 % (2018), -77 % (2022). Envisagez de la retirer ou de choisir le profil Dynamique.'
+      `⚠️ Crypto ${cryptoPct} % dans un profil ${risk} : poche satellite spéculative inadaptée. ` +
+      'Drawdowns historiques BTC/ETH : -84 % (2018), -77 % (2022). Envisagez de la retirer ou de choisir le profil Dynamique.'
     );
   }
 
   const equityPct = EQUITY_IDS.reduce((sum, id) => sum + (allocations[id] || 0), 0);
   if (horizon < 5 && equityPct > 50) {
     warnings.push(
-      `⚠️ Exposition actions ${equityPct} % pour un horizon de ${horizon} an${horizon > 1 ? 's' : ''} : ` +
-      'risque de ne pas avoir le temps d\'attendre un rebond après un choc de marché (-25 à -35 %). ' +
-      'Règle empirique : ≤ 40–50 % d\'actions à horizon < 5 ans.'
+      `⚠️ Exposition actions ${equityPct} % pour un horizon de ${horizon} an${horizon > 1 ? 's' : ''} : ` +
+      'risque de ne pas avoir le temps d\'attendre un rebond après un choc de marché (-25 à -35 %). ' +
+      'Règle empirique : ≤ 40–50 % d\'actions à horizon < 5 ans.'
     );
   } else if (horizon < 3 && equityPct > 30) {
     warnings.push(
-      `⚠️ Exposition actions ${equityPct} % pour un horizon très court (${horizon} an${horizon > 1 ? 's' : ''}) : ` +
+      `⚠️ Exposition actions ${equityPct} % pour un horizon très court (${horizon} an${horizon > 1 ? 's' : ''}) : ` +
       'fortement déconseillé. Privilégiez des produits garantis ou à faible volatilité.'
     );
   }
@@ -364,7 +364,7 @@ function renderResults() {
   const subtitle = document.getElementById('sim-subtitle');
   subtitle.textContent =
     `Capital : ${fmt(capital)} — Horizon : ${horizon} ans — Versements : ${fmt(mensuel)}/mois — ` +
-    `TMI : ${tmi} % — μ : ${fmtPct(mu)} — σ : ${fmtPct(sigma)}`;
+    `TMI : ${tmi} % — μ : ${fmtPct(mu)} — σ : ${fmtPct(sigma)}`;
 
   document.getElementById('kpi-loss').textContent = fmtPct(probLoss);
   document.getElementById('kpi-loss-sub').textContent = `(capital initial : ${fmt(capital)})`;
@@ -373,7 +373,7 @@ function renderResults() {
   document.getElementById('kpi-median-sub').textContent = `Net après fiscalité — brut : ${fmt(p50)}`;
 
   document.getElementById('kpi-p90').textContent = fmt(p90);
-  document.getElementById('kpi-p90-sub').textContent = `10 % des simulations au-dessus (brut)`;
+  document.getElementById('kpi-p90-sub').textContent = `10 % des simulations au-dessus (brut)`;
 
   document.getElementById('kpi-p10').textContent = fmt(netP10);
   document.getElementById('kpi-p10-sub').textContent = `Net pessimiste — brut : ${fmt(p10)}`;
@@ -403,7 +403,7 @@ function renderTable(productMedians) {
     const cells = [
       () => { const td = document.createElement('td'); const b = document.createElement('b'); b.textContent = `${p.icon} ${p.name}`; td.appendChild(b); return td; },
       () => { const td = document.createElement('td'); const sp = document.createElement('span'); sp.className = `product-vehicle ${vehicleClass(p.vehicle)}`; sp.textContent = p.vehicleLabel; td.appendChild(sp); return td; },
-      () => { const td = document.createElement('td'); td.textContent = `${pct} %`; return td; },
+      () => { const td = document.createElement('td'); td.textContent = `${pct} %`; return td; },
       () => { const td = document.createElement('td'); td.textContent = fmtPct(muNet); return td; },
       () => { const td = document.createElement('td'); td.textContent = fmtPct(p.sigma); return td; },
       () => { const td = document.createElement('td'); td.textContent = fmt(med); return td; },
@@ -471,7 +471,7 @@ function renderExplainer(probLoss, probLossInvested, mu, sigma, netP50, totalInv
     `Rendement annuel moyen brut (μ), corrélations entre actifs incluses : ${fmtPct(mu)}`,
     `Volatilité annuelle globale (σ, corrélations intégrées) : ${fmtPct(sigma)}`,
     `Net médian après fiscalité : ${fmt(netP50)}`,
-    `Valeur nette médiane en euros constants (inflation ~2,2 %/an) : ${fmt(realNetP50)}`,
+    `Valeur nette médiane en euros constants (inflation ~2,2 %/an) : ${fmt(realNetP50)}`,
     `Méthode : Monte Carlo joint corrélé (10 000 scénarios), pas mensuel, fiscalité appliquée scénario par scénario.`,
   ];
 
