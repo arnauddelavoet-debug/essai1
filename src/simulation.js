@@ -204,6 +204,7 @@ export function runSimulation({ capital, horizon, mensuel, alloc, tmi, products,
   }
 
   return {
+    sortedGross,
     p5: percentile(sortedGross, 5),
     p10: percentile(sortedGross, 10),
     p25: percentile(sortedGross, 25),
