@@ -3,7 +3,7 @@ import { blendedParams } from './simulation.js';
 import { CORRELATIONS } from './products.js';
 import { fmtPdf, fmtPctPdf } from './format.js';
 import { showError, showLoading, hideLoading } from './errors.js';
-import { getChartInstance, resizeCharts } from './charts.js';
+import { resizeCharts } from './charts.js';
 import { state } from './state.js';
 import { activateTab } from './ui.js';
 
