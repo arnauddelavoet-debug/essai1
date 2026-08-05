@@ -3,11 +3,24 @@ import { buildCorrelationMatrix, cholesky, applyCholesky } from './correlation.j
 
 const VEHICLES = ['Livret', 'PEA', 'AV', 'CTO'];
 
+// Box-Muller produit deux variables N(0,1) indépendantes (cos et sin) par
+// paire de tirages uniformes ; on met en cache la seconde ("spare") au lieu
+// de la jeter, ce qui divise par deux le nombre de Math.random()/Math.log
+// dans la boucle chaude de la simulation.
+let spareRandn = null;
+
 function randn() {
-  let u = 0, v = 0;
+  if (spareRandn !== null) {
+    const v = spareRandn;
+    spareRandn = null;
+    return v;
+  }
+  let u = 0, v1 = 0;
   while (u === 0) u = Math.random();
-  while (v === 0) v = Math.random();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  while (v1 === 0) v1 = Math.random();
+  const mag = Math.sqrt(-2 * Math.log(u));
+  spareRandn = mag * Math.sin(2 * Math.PI * v1);
+  return mag * Math.cos(2 * Math.PI * v1);
 }
 
 /** Retourne le percentile p (0–100) d'un tableau trié croissant. */
@@ -91,21 +104,27 @@ export function runSimulation({ capital, horizon, mensuel, alloc, tmi, products,
   const pctPaths = { p10: [capital], p25: [capital], p50: [capital], p75: [capital], p90: [capital] };
   const yearlySnapshots = Array.from({ length: horizon }, () => new Float64Array(nSims));
 
+  // Buffers réutilisés à chaque mois × scénario (active.length est constant
+  // pour toute la simulation) — évite ~3,6M allocations de petits tableaux
+  // dans le cas typique (nSims=10000, horizon=30, plusieurs produits).
+  const shocksBuf = new Float64Array(active.length);
+  const correlatedBuf = new Float64Array(active.length);
+
   for (let s = 0; s < nSims; s++) {
     const values = active.map(({ w }) => capital * w);
     let monthInYear = 0;
     let yearIdx = 0;
 
     for (let m = 0; m < months; m++) {
-      const shocks = active.map(() => randn());
-      const correlated = applyCholesky(L, shocks);
+      for (let k = 0; k < active.length; k++) shocksBuf[k] = randn();
+      applyCholesky(L, shocksBuf, correlatedBuf);
 
       for (let i = 0; i < active.length; i++) {
         const { w, p } = active[i];
         if (p.sigma === 0) {
           values[i] *= Math.pow(1 + p.mu, dt);
         } else {
-          values[i] *= Math.exp((p.mu - 0.5 * p.sigma * p.sigma) * dt + p.sigma * Math.sqrt(dt) * correlated[i]);
+          values[i] *= Math.exp((p.mu - 0.5 * p.sigma * p.sigma) * dt + p.sigma * Math.sqrt(dt) * correlatedBuf[i]);
         }
         values[i] += mensuel * w;
       }
@@ -132,7 +151,7 @@ export function runSimulation({ capital, horizon, mensuel, alloc, tmi, products,
       vehicleFinals[p.vehicleFiscal][s] += finalV;
 
       const invested = capital * w + mensuel * w * months;
-      gainByVehicle[p.vehicleFiscal] += Math.max(0, finalV - invested);
+      gainByVehicle[p.vehicleFiscal] += (finalV - invested);
     }
 
     let taxTotal = 0;

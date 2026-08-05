@@ -93,3 +93,30 @@ test('blendedParams calcule mu comme la moyenne ponderee des rendements', () => 
   const { mu } = blendedParams({ a: 25, b: 75 }, products, {});
   assert.ok(Math.abs(mu - (0.25 * 0.02 + 0.75 * 0.08)) < 1e-9);
 });
+
+test('le netting fiscal se fait par vehicule (compensation des moins-values entre produits d\'un meme vehicule), pas par produit', () => {
+  // Deux lignes CTO deterministes (sigma=0) dans le meme scenario : l'une gagne, l'autre perd.
+  // Fiscalement, la moins-value de l'une doit s'imputer sur la plus-value de l'autre AVANT
+  // le calcul de l'impot (netting au niveau du vehicule), et non etre clampee a 0 par produit.
+  const GAIN_CTO = { id: 'gain-cto', mu: 0.05, sigma: 0, vehicleFiscal: 'CTO' };
+  const LOSS_CTO = { id: 'loss-cto', mu: -0.05, sigma: 0, vehicleFiscal: 'CTO' };
+  const result = runSimulation({
+    capital: 10000, horizon: 10, mensuel: 0, tmi: 30,
+    alloc: { 'gain-cto': 50, 'loss-cto': 50 },
+    products: [GAIN_CTO, LOSS_CTO], correlations: {}, nSims: 10,
+  });
+
+  const finalGain = 5000 * Math.pow(1.05, 10);
+  const finalLoss = 5000 * Math.pow(0.95, 10);
+  const grossTotal = finalGain + finalLoss;
+
+  // Netting correct : la perte (negative) compense le gain AVANT le clamp fiscal.
+  const nettedGain = (finalGain - 5000) + (finalLoss - 5000);
+  // PFU 30% avantageux ici (tmi 30% + PS 17.2% = 47.2% > 30%)
+  const expectedTax = nettedGain * 0.30;
+  const expectedNet = grossTotal - expectedTax;
+
+  assert.ok(Math.abs(result.p50 - grossTotal) < 1);
+  assert.ok(Math.abs(result.netP50 - expectedNet) < 1,
+    `net attendu ${expectedNet}, obtenu ${result.netP50} (le clamp par produit surestimerait l'impot)`);
+});

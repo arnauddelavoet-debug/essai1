@@ -58,10 +58,13 @@ export function cholesky(matrix) {
 /**
  * Applique la matrice L à un vecteur de chocs indépendants N(0,1) pour
  * produire un vecteur de chocs corrélés selon la matrice d'origine.
+ * Un buffer de sortie `out` peut être fourni pour éviter une allocation
+ * à chaque appel (boucle chaude de la simulation Monte Carlo) ; si
+ * absent, un nouveau tableau est alloué comme auparavant.
  */
-export function applyCholesky(L, independentShocks) {
+export function applyCholesky(L, independentShocks, out) {
   const n = L.length;
-  const result = new Array(n).fill(0);
+  const result = out || new Array(n).fill(0);
   for (let i = 0; i < n; i++) {
     let sum = 0;
     for (let k = 0; k <= i; k++) {
