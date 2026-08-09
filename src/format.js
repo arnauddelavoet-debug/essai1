@@ -30,3 +30,16 @@ export function fmtPctPdf(p) {
   if (!Number.isFinite(p)) return '-';
   return (p * 100).toFixed(1) + '%';
 }
+
+/**
+ * Taux d'inflation annuel moyen utilisé pour déflater les valeurs nettes.
+ * Partagé entre l'écran (ui.js) et le PDF (pdf.js) pour éviter toute divergence.
+ */
+export const INFLATION = 0.022;
+
+/**
+ * Déflate une valeur nette sur l'horizon donné pour obtenir des euros constants.
+ */
+export function realValue(netValue, horizon) {
+  return netValue / Math.pow(1 + INFLATION, horizon);
+}

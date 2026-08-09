@@ -1,12 +1,10 @@
 import { PRODUCTS, SUGGESTIONS, PROFILE_SIGMA_RANGES, CORRELATIONS, EQUITY_IDS } from './products.js';
 import { runSimulation, blendedParams } from './simulation.js';
-import { fmt, fmtPct } from './format.js';
+import { fmt, fmtPct, realValue } from './format.js';
 import { showError, hideError, showLoading, hideLoading } from './errors.js';
 import { renderGauge, renderHistogram, renderFanChart, renderDonut, resizeCharts } from './charts.js';
 import { state } from './state.js';
 import { generatePDF } from './pdf.js';
-
-const INFLATION = 0.022;
 
 // ----------------------------------------------------------------
 // ALLOCATION DYNAMIQUE PAR PROFIL (avec exclusion de produits)
@@ -463,7 +461,7 @@ function renderExplainer(probLoss, probLossInvested, mu, sigma, netP50, totalInv
   p.textContent = lvl.advice;
   container.appendChild(p);
 
-  const realNetP50 = netP50 / Math.pow(1 + INFLATION, horizon);
+  const realNetP50 = realValue(netP50, horizon);
 
   const items = [
     `Probabilité de ne pas récupérer le capital initial (${fmt(capital)}) : ${fmtPct(probLoss)}`,

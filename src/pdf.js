@@ -1,13 +1,11 @@
 import { PRODUCTS, PROFILE_SIGMA_RANGES } from './products.js';
 import { blendedParams } from './simulation.js';
 import { CORRELATIONS } from './products.js';
-import { fmtPdf, fmtPctPdf } from './format.js';
+import { fmtPdf, fmtPctPdf, realValue } from './format.js';
 import { showError, showLoading, hideLoading } from './errors.js';
 import { resizeCharts } from './charts.js';
 import { state } from './state.js';
 import { activateTab } from './ui.js';
-
-const INFLATION = 0.022;
 
 async function sha256(message) {
   try {
@@ -196,7 +194,7 @@ export async function generatePDF() {
     });
     y += 2 * (bh + 4) + 8;
 
-    const realNetP50 = netP50 / Math.pow(1 + INFLATION, horizon);
+    const realNetP50 = realValue(netP50, horizon);
     doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(...MUTED);
     doc.text(`Valeur nette médiane en euros constants (inflation ~2,2 %/an) : ${fmtPdf(realNetP50)}`, ML, y);
     y += 6;
