@@ -2,8 +2,14 @@
   "name": "simuportefeuille",
   "version": "1.0.0",
   "private": true,
+  "license": "UNLICENSED",
   "type": "module",
   "description": "Simulateur Monte Carlo de portefeuille financier — moteur de calcul et interface web statique.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arnauddelavoet-debug/essai1.git"
+  },
+  "homepage": "https://arnauddelavoet-debug.github.io/essai1/",
   "engines": {
     "node": ">=18"
   },
