@@ -8,7 +8,7 @@
     • script-src sans 'unsafe-inline' → aucun gestionnaire inline (onclick…)
     • style-src 'unsafe-inline' nécessaire pour les styles dynamiques Chart.js / jsPDF
     • img-src data: requis pour les captures canvas → PDF
-    • connect-src 'none' : aucune XHR/fetch externe (app 100 % locale)
+    • connect-src 'self' + vitals.vercel-insights.com : Vercel Web Analytics
   -->
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none';
@@ -16,7 +16,7 @@
                  style-src 'self' 'unsafe-inline';
                  img-src 'self' data: blob:;
                  font-src 'self';
-                 connect-src 'none';
+                 connect-src 'self' https://vitals.vercel-insights.com;
                  frame-ancestors 'none';
                  base-uri 'self';
                  form-action 'none';" />
@@ -378,5 +378,11 @@
 </footer>
 
 <script type="module" src="src/main.js"></script>
+
+<!-- Vercel Web Analytics -->
+<script>
+  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>
