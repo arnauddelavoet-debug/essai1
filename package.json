@@ -15,5 +15,8 @@
   },
   "scripts": {
     "test": "node --test"
+  },
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
   }
 }
