@@ -1,0 +1,6 @@
+test/
+docs/
+scripts/
+.github/
+.ruff_cache/
+*.md

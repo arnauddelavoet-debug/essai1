@@ -5,3 +5,5 @@ npm-debug.log*
 .vscode/
 .idea/
 *.swp
+.vercel/
+.ruff_cache/

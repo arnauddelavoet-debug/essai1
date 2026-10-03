@@ -1,22 +1,22 @@
 {
   "name": "simuportefeuille",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
-  "description": "Simulateur Monte Carlo de portefeuille financier — moteur de calcul et interface web statique.",
+  "description": "Simulateur Monte Carlo pédagogique de portefeuille financier — fiscalité française 2026, données de marché en direct, 100 % client.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/arnauddelavoet-debug/essai1.git"
   },
-  "homepage": "https://arnauddelavoet-debug.github.io/essai1/",
+  "homepage": "https://simulationportefeuille.vercel.app",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "scripts": {
-    "test": "node --test"
-  },
-  "dependencies": {
-    "@vercel/analytics": "^2.0.1"
+    "test": "node --test",
+    "check": "node --check src/main.js && node --test",
+    "serve": "python3 -m http.server 8000",
+    "market:update": "node scripts/update-market-snapshot.js"
   }
 }
