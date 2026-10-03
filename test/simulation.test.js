@@ -1,122 +1,172 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runSimulation, blendedParams, percentile } from '../src/simulation.js';
+import { runSimulation } from '../src/engine/simulation.js';
 
-const LIVRET = { id: 'livret-a', mu: 0.024, sigma: 0, vehicleFiscal: 'Livret' };
-const VOLATILE = { id: 'etf-world', mu: 0.075, sigma: 0.155, vehicleFiscal: 'PEA' };
-const AV_PRODUCT = { id: 'fonds-euro', mu: 0.025, sigma: 0.004, vehicleFiscal: 'AV' };
+const TAX = { tmi: 30, tmiRetraite: 30, couple: false, peaAnciennete: 0, avAnciennete: 0, bareme: 'pfu' };
+const LIVRET = { id: 'livret', vehicle: 'LIVRET', weight: 1, mu: 0.017, sigma: 0 };
+const WORLD = { id: 'world', vehicle: 'PEA', weight: 1, mu: 0.07, sigma: 0.15 };
+const base = over => ({ capital: 10_000, horizon: 10, monthly: 0, lines: [LIVRET], tax: TAX, nSims: 500, seed: 42, ...over });
 
-test('percentile retourne 0 pour un tableau vide et gère les bornes', () => {
-  assert.equal(percentile([], 50), 0);
-  const sorted = [1, 2, 3, 4, 5];
-  assert.equal(percentile(sorted, 0), 1);
-  assert.equal(percentile(sorted, 100), 5);
+test('refuse une allocation vide', () => {
+  assert.throws(() => runSimulation(base({ lines: [] })), /Aucun produit alloué/);
 });
 
-test('runSimulation leve une erreur si aucun produit n\'est alloue', () => {
-  assert.throws(() => runSimulation({
-    capital: 10000, horizon: 10, mensuel: 0, tmi: 30,
-    alloc: {}, products: [LIVRET], correlations: {}, nSims: 100,
-  }), /Aucun produit alloué/);
+test('refuse des pondérations qui ne totalisent pas 100 %', () => {
+  assert.throws(() => runSimulation(base({ lines: [{ ...LIVRET, weight: 0.5 }] })), /100 %/);
 });
 
-test('portefeuille 100% Livret (sigma=0) : tous les scenarios sont identiques (deterministe)', () => {
-  const result = runSimulation({
-    capital: 10000, horizon: 10, mensuel: 0, tmi: 30,
-    alloc: { 'livret-a': 100 }, products: [LIVRET], correlations: {}, nSims: 500,
-  });
-  const expected = 10000 * Math.pow(1.024, 10);
-  assert.ok(Math.abs(result.p10 - expected) < 1);
-  assert.ok(Math.abs(result.p50 - expected) < 1);
-  assert.ok(Math.abs(result.p90 - expected) < 1);
-  assert.equal(result.probLoss, 0); // rendement positif garanti > capital initial
+test('refuse un horizon non entier et un contexte fiscal manquant', () => {
+  assert.throws(() => runSimulation(base({ horizon: 2.5 })), /horizon/);
+  assert.throws(() => runSimulation(base({ tax: undefined })), /TMI/);
 });
 
-test('la mediane brute d\'un actif volatil converge vers la formule fermee du MBG (sans versements)', () => {
-  const result = runSimulation({
-    capital: 10000, horizon: 10, mensuel: 0, tmi: 30,
-    alloc: { 'etf-world': 100 }, products: [VOLATILE], correlations: {}, nSims: 20000,
-  });
-  const theoreticalMedian = 10000 * Math.exp((VOLATILE.mu - 0.5 * VOLATILE.sigma * VOLATILE.sigma) * 10);
-  const relErr = Math.abs(result.p50 - theoreticalMedian) / theoreticalMedian;
-  assert.ok(relErr < 0.05, `mediane simulee ${result.p50} trop eloignee de la theorique ${theoreticalMedian}`);
+test('livret à 100 % : résultat déterministe égal à la capitalisation, net = brut', () => {
+  const r = runSimulation(base());
+  const expected = 10_000 * Math.pow(1.017, 10);
+  assert.ok(Math.abs(r.gross.p10 - expected) < 1e-6);
+  assert.ok(Math.abs(r.gross.p90 - expected) < 1e-6);
+  assert.ok(Math.abs(r.net.p50 - expected) < 1e-6);
+  assert.equal(r.probLoss, 0);
 });
 
-test('la valeur nette est toujours inferieure ou egale a la valeur brute (l\'impot ne peut pas etre negatif)', () => {
-  const result = runSimulation({
-    capital: 10000, horizon: 10, mensuel: 200, tmi: 30,
-    alloc: { 'fonds-euro': 100 }, products: [AV_PRODUCT], correlations: {}, nSims: 5000,
-  });
-  assert.ok(result.netP50 <= result.p50);
-  assert.ok(result.netP10 <= result.p10);
+test('même graine → mêmes résultats ; graine différente → résultats différents', () => {
+  const a = runSimulation(base({ lines: [WORLD], seed: 7 }));
+  const b = runSimulation(base({ lines: [WORLD], seed: 7 }));
+  const c = runSimulation(base({ lines: [WORLD], seed: 8 }));
+  assert.equal(a.gross.p50, b.gross.p50);
+  assert.deepEqual(Array.from(a.sortedNet), Array.from(b.sortedNet));
+  assert.notEqual(a.gross.p50, c.gross.p50);
 });
 
-test('les versements mensuels augmentent la valeur finale mediane par rapport a un capital seul', () => {
-  const withoutContrib = runSimulation({
-    capital: 10000, horizon: 10, mensuel: 0, tmi: 30,
-    alloc: { 'livret-a': 100 }, products: [LIVRET], correlations: {}, nSims: 500,
-  });
-  const withContrib = runSimulation({
-    capital: 10000, horizon: 10, mensuel: 200, tmi: 30,
-    alloc: { 'livret-a': 100 }, products: [LIVRET], correlations: {}, nSims: 500,
-  });
-  assert.ok(withContrib.p50 > withoutContrib.p50);
+test('la médiane brute converge vers la formule fermée du MBG', () => {
+  const r = runSimulation(base({ lines: [WORLD], nSims: 20_000 }));
+  const theo = 10_000 * Math.exp((0.07 - 0.5 * 0.15 ** 2) * 10);
+  assert.ok(Math.abs(r.gross.p50 - theo) / theo < 0.02, `${r.gross.p50} vs ${theo}`);
 });
 
-test('fiscalByVehicle regroupe correctement le capital par vehicule fiscal', () => {
-  const result = runSimulation({
-    capital: 10000, horizon: 10, mensuel: 0, tmi: 30,
-    alloc: { 'livret-a': 50, 'fonds-euro': 50 },
-    products: [LIVRET, AV_PRODUCT], correlations: {}, nSims: 500,
-  });
-  assert.ok(Math.abs(result.fiscalByVehicle['Livret'].capital - 5000) < 1e-6);
-  assert.ok(Math.abs(result.fiscalByVehicle['AV'].capital - 5000) < 1e-6);
-  assert.equal(result.fiscalByVehicle['Livret'].tax, 0); // Livret jamais imposé
+test('la moyenne brute converge vers capital × e^(μT)', () => {
+  const r = runSimulation(base({ lines: [WORLD], nSims: 20_000 }));
+  const theo = 10_000 * Math.exp(0.07 * 10);
+  assert.ok(Math.abs(r.gross.mean - theo) / theo < 0.03);
 });
 
-test('blendedParams : une correlation positive augmente la volatilite du portefeuille par rapport a une correlation nulle', () => {
-  const products = [
-    { id: 'a', mu: 0.07, sigma: 0.15 },
-    { id: 'b', mu: 0.07, sigma: 0.15 },
-  ];
-  const alloc = { a: 50, b: 50 };
-  const uncorrelated = blendedParams(alloc, products, {});
-  const correlated = blendedParams(alloc, products, { a: { b: 0.9 } });
-  assert.ok(correlated.sigma > uncorrelated.sigma);
+test('queues épaisses (Student) : même variance, mais pire queue gauche à 1 %', () => {
+  const normal = runSimulation(base({ lines: [WORLD], horizon: 1, nSims: 40_000 }));
+  const student = runSimulation(base({ lines: [WORLD], horizon: 1, nSims: 40_000, distribution: 'student', df: 3 }));
+  const q = (r, p) => r.sortedGross[Math.floor(r.sortedGross.length * p)];
+  assert.ok(q(student, 0.001) < q(normal, 0.001), 'la queue extrême doit être plus épaisse');
 });
 
-test('blendedParams calcule mu comme la moyenne ponderee des rendements', () => {
-  const products = [
-    { id: 'a', mu: 0.02, sigma: 0 },
-    { id: 'b', mu: 0.08, sigma: 0 },
-  ];
-  const { mu } = blendedParams({ a: 25, b: 75 }, products, {});
-  assert.ok(Math.abs(mu - (0.25 * 0.02 + 0.75 * 0.08)) < 1e-9);
+test('les frais réduisent la valeur finale et sont comptabilisés', () => {
+  const noFee = runSimulation(base({ lines: [{ ...LIVRET, mu: 0.03 }] }));
+  const withFee = runSimulation(base({ lines: [{ ...LIVRET, mu: 0.03 - 0.01, fee: 0.01 }] }));
+  assert.ok(withFee.gross.p50 < noFee.gross.p50);
+  assert.ok(withFee.fees.managementP50 > 900 && withFee.fees.managementP50 < 1_300);
 });
 
-test('le netting fiscal se fait par vehicule (compensation des moins-values entre produits d\'un meme vehicule), pas par produit', () => {
-  // Deux lignes CTO deterministes (sigma=0) dans le meme scenario : l'une gagne, l'autre perd.
-  // Fiscalement, la moins-value de l'une doit s'imputer sur la plus-value de l'autre AVANT
-  // le calcul de l'impot (netting au niveau du vehicule), et non etre clampee a 0 par produit.
-  const GAIN_CTO = { id: 'gain-cto', mu: 0.05, sigma: 0, vehicleFiscal: 'CTO' };
-  const LOSS_CTO = { id: 'loss-cto', mu: -0.05, sigma: 0, vehicleFiscal: 'CTO' };
-  const result = runSimulation({
-    capital: 10000, horizon: 10, mensuel: 0, tmi: 30,
-    alloc: { 'gain-cto': 50, 'loss-cto': 50 },
-    products: [GAIN_CTO, LOSS_CTO], correlations: {}, nSims: 10,
-  });
+test('frais d\'entrée : prélevés sur chaque versement, base fiscale = montant versé', () => {
+  const r = runSimulation(base({ lines: [{ ...LIVRET, mu: 0, entryFee: 0.05, vehicle: 'CTO' }] }));
+  assert.ok(Math.abs(r.gross.p50 - 9_500) < 1e-6);
+  assert.ok(Math.abs(r.fees.entry - 500) < 1e-6);
+  assert.equal(r.taxes.exitP50, 0); // perte de 500 € : pas d'impôt
+});
 
-  const finalGain = 5000 * Math.pow(1.05, 10);
-  const finalLoss = 5000 * Math.pow(0.95, 10);
-  const grossTotal = finalGain + finalLoss;
+test('versements mensuels et indexation : total investi exact', () => {
+  const r = runSimulation(base({ monthly: 100, contributionGrowth: 0.02, horizon: 3 }));
+  const expected = 10_000 + 1_200 * (1 + 1.02 + 1.02 ** 2);
+  assert.ok(Math.abs(r.invested - expected) < 1e-6);
+  assert.equal(r.investedPath.length, 4);
+  assert.ok(Math.abs(r.investedPath[3] - expected) < 1e-6);
+});
 
-  // Netting correct : la perte (negative) compense le gain AVANT le clamp fiscal.
-  const nettedGain = (finalGain - 5000) + (finalLoss - 5000);
-  // PFU 30% avantageux ici (tmi 30% + PS 17.2% = 47.2% > 30%)
-  const expectedTax = nettedGain * 0.30;
-  const expectedNet = grossTotal - expectedTax;
+test('le TRI médian d\'un placement déterministe égale son taux', () => {
+  const r = runSimulation(base({ monthly: 100, lines: [{ ...LIVRET, mu: 0.03 }] }));
+  assert.ok(Math.abs(r.irr.p50 - 0.03) < 1e-4, `TRI ${r.irr.p50}`);
+});
 
-  assert.ok(Math.abs(result.p50 - grossTotal) < 1);
-  assert.ok(Math.abs(result.netP50 - expectedNet) < 1,
-    `net attendu ${expectedNet}, obtenu ${result.netP50} (le clamp par produit surestimerait l'impot)`);
+test('fiscalité par scénario : compensation des gains et pertes au sein d\'une enveloppe', () => {
+  const gain = { id: 'g', vehicle: 'CTO', weight: 0.5, mu: 0.05, sigma: 0 };
+  const loss = { id: 'l', vehicle: 'CTO', weight: 0.5, mu: -0.05, sigma: 0 };
+  const r = runSimulation(base({ lines: [gain, loss] }));
+  const fg = 5_000 * 1.05 ** 10, fl = 5_000 * 0.95 ** 10;
+  const tax = (fg + fl - 10_000) * 0.314;
+  assert.ok(Math.abs(r.net.p50 - (fg + fl - tax)) < 1e-6);
+});
+
+test('net ≤ brut dans tous les scénarios', () => {
+  const r = runSimulation(base({ lines: [WORLD], monthly: 200 }));
+  for (const k of ['p10', 'p50', 'p90']) assert.ok(r.net[k] <= r.gross[k] + 1e-9);
+});
+
+test('euros constants : valeur nette déflatée de l\'inflation', () => {
+  const r = runSimulation(base({ inflation: 0.02 }));
+  assert.ok(Math.abs(r.netReal.p50 - r.net.p50 / 1.02 ** 10) < 1e-6);
+});
+
+test('probabilité d\'atteindre un objectif', () => {
+  const r = runSimulation(base({ lines: [WORLD], target: 1 }));
+  assert.equal(r.probTarget, 1);
+  const r2 = runSimulation(base({ lines: [WORLD], target: 1e9 }));
+  assert.equal(r2.probTarget, 0);
+  assert.equal(runSimulation(base()).probTarget, null);
+});
+
+test('rééquilibrage annuel : restaure les pondérations au sein d\'une enveloppe', () => {
+  const up = { id: 'up', vehicle: 'AV', weight: 0.5, mu: 0.10, sigma: 0 };
+  const flat = { id: 'flat', vehicle: 'AV', weight: 0.5, mu: 0.0, sigma: 0 };
+  const none = runSimulation(base({ lines: [up, flat], horizon: 1, rebalancing: 'none' }));
+  const annual = runSimulation(base({ lines: [up, flat], horizon: 1, rebalancing: 'annual' }));
+  assert.ok(none.lines.up.p50 > none.lines.flat.p50);
+  assert.ok(Math.abs(annual.lines.up.p50 - annual.lines.flat.p50) < 1e-6);
+  assert.ok(Math.abs(none.gross.p50 - annual.gross.p50) < 1e-6);
+});
+
+test('rééquilibrage : jamais entre enveloppes différentes', () => {
+  const pea = { id: 'pea', vehicle: 'PEA', weight: 0.5, mu: 0.10, sigma: 0 };
+  const av = { id: 'av', vehicle: 'AV', weight: 0.5, mu: 0.0, sigma: 0 };
+  const r = runSimulation(base({ lines: [pea, av], horizon: 2, rebalancing: 'annual' }));
+  assert.ok(r.lines.pea.p50 > r.lines.av.p50);
+});
+
+test('économie d\'impôt PER calculée sur les versements de chaque année', () => {
+  const per = { id: 'per', vehicle: 'PER', weight: 1, mu: 0.02, sigma: 0 };
+  const r = runSimulation(base({ lines: [per], monthly: 100, horizon: 2 }));
+  assert.ok(Math.abs(r.taxes.perSaving - (10_000 + 1_200 + 1_200) * 0.30) < 1e-6);
+});
+
+test('SCPI : l\'impôt annuel sur les loyers est comptabilisé', () => {
+  const scpi = { id: 's', vehicle: 'SCPI', weight: 1, mu: 0.04 - 0.02, sigma: 0, annualTax: 0.02 };
+  const r = runSimulation(base({ lines: [scpi] }));
+  assert.ok(r.taxes.lifetimeP50 > 2_000 && r.taxes.lifetimeP50 < 2_600);
+});
+
+test('corrélation : deux actifs parfaitement corrélés ont la même volatilité de portefeuille qu\'un seul', () => {
+  const a = { ...WORLD, id: 'a', weight: 0.5 };
+  const b = { ...WORLD, id: 'b', weight: 0.5 };
+  const corr = runSimulation(base({ lines: [a, b], correlation: [[1, 0.999], [0.999, 1]], nSims: 5_000 }));
+  const indep = runSimulation(base({ lines: [a, b], correlation: [[1, 0], [0, 1]], nSims: 5_000 }));
+  const spread = r => r.gross.p90 - r.gross.p10;
+  assert.ok(spread(corr) > spread(indep) * 1.2);
+});
+
+test('drawdown, CVaR et progression sont renseignés', () => {
+  const calls = [];
+  const r = runSimulation(base({ lines: [WORLD], onProgress: f => calls.push(f) }));
+  assert.ok(r.drawdown.p50 > 0 && r.drawdown.p50 < 1);
+  assert.ok(r.drawdown.p90 >= r.drawdown.p50);
+  assert.ok(r.cvar5 <= r.net.p5 + 1e-9);
+  assert.equal(calls.at(-1), 1);
+});
+
+test('performance : 10 000 scénarios × 30 ans × 8 lignes en moins de 8 s', () => {
+  const lines = Array.from({ length: 8 }, (_, i) => ({ id: `l${i}`, vehicle: 'PEA', weight: 1 / 8, mu: 0.06, sigma: 0.15 }));
+  const t0 = Date.now();
+  runSimulation(base({ lines, horizon: 30, monthly: 300, nSims: 10_000 }));
+  assert.ok(Date.now() - t0 < 8_000, `${Date.now() - t0} ms`);
+});
+
+test('TRI renseigné sur un horizon long avec versements (régression)', () => {
+  const r = runSimulation(base({ lines: [WORLD], monthly: 200, horizon: 40, nSims: 300 }));
+  for (const k of ['p10', 'p50', 'p90']) assert.ok(Number.isFinite(r.irr[k]), `${k} = ${r.irr[k]}`);
+  assert.ok(r.irr.p10 < r.irr.p50 && r.irr.p50 < r.irr.p90);
 });

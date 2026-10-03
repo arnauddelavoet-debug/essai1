@@ -1,393 +1,220 @@
-import { PRODUCTS, PROFILE_SIGMA_RANGES } from './products.js';
-import { blendedParams } from './simulation.js';
-import { CORRELATIONS } from './products.js';
-import { fmtPdf, fmtPctPdf, realValue } from './format.js';
-import { showError, showLoading, hideLoading } from './errors.js';
-import { resizeCharts } from './charts.js';
-import { state } from './state.js';
-import { activateTab } from './ui.js';
+import { state } from '../state.js';
+import { VEHICLES, VEHICLE_ORDER } from '../data/vehicles.js';
+import { PROFILES } from '../data/profiles.js';
+import { FISCAL } from '../config/fiscal.js';
+import { ASSUMPTION_MODES, portfolioStats } from '../engine/assumptions.js';
+import { allocationWarnings } from '../engine/allocation.js';
+import { CATALOG } from '../data/catalog.js';
+import { VERSION } from '../version.js';
+import { fmtPdf, fmtPctPdf } from './format.js';
+import { chartImage } from './charts.js';
+import { riskLevel } from './results.js';
+
+// jsPDF (≈ 350 ko) n'est chargé qu'au premier export, avec contrôle
+// d'intégrité (SRI) : la page reste légère pour qui n'exporte pas.
+const LIBS = [
+  { src: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', integrity: 'sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk' },
+  { src: 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js', integrity: 'sha384-fCAW/rDWORTbQXSiB7mOg0QtQ5c+r0f544y6XoKjuVva0nMBlCpNUjiFeG5iMdS3' },
+];
+
+function loadScript({ src, integrity }) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.integrity = integrity;
+    s.crossOrigin = 'anonymous';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error(`Chargement impossible : ${src}`));
+    document.head.append(s);
+  });
+}
+
+let loading = null;
+export function ensurePdfLibs() {
+  if (window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API.autoTable) return Promise.resolve();
+  loading ||= LIBS.reduce((p, lib) => p.then(() => loadScript(lib)), Promise.resolve()).catch(e => { loading = null; throw e; });
+  return loading;
+}
 
 async function sha256(message) {
   try {
-    const buf = new TextEncoder().encode(message);
-    const hash = await crypto.subtle.digest('SHA-256', buf);
-    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(message));
+    return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, '0')).join('');
   } catch {
-    return 'unavailable';
+    return 'indisponible';
   }
 }
 
-function captureChart(canvasId) {
-  try {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) return null;
+/** Remplace les caractères hors WinAnsi (polices standard jsPDF). */
+const ascii = t => String(t).replace(/[  ]/g, ' ').replace(/[μ]/g, 'mu').replace(/[σ]/g, 'sigma').replace(/[−–]/g, '-').replace(/[’]/g, "'").replace(/[≈]/g, '~').replace(/[≥]/g, '>=').replace(/[≤]/g, '<=').replace(/[^\x20-\x7E -ÿ€]/g, '');
 
-    const hiddenPanel = canvas.closest('.tab-panel[hidden]');
-    if (hiddenPanel) {
-      hiddenPanel.removeAttribute('hidden');
-      resizeCharts();
-    }
+/**
+ * Génère le rapport PDF. `captureCharts` doit redessiner les graphiques
+ * en thème clair et renvoyer leurs images (voir app.js).
+ */
+export async function generatePDF(captureCharts) {
+  await ensurePdfLibs();
+  const { jsPDF } = window.jspdf;
+  const s = state;
+  const r = s.simResults;
+  const stats = portfolioStats(s.plan.lines, s.plan.correlation);
+  const images = await captureCharts();
 
-    const dataUrl = canvas.toDataURL('image/png', 1.0);
+  const docId = `${Date.now().toString(36)}-${r.meta.seed.toString(36)}`.toUpperCase();
+  const fingerprint = await sha256(JSON.stringify({ v: VERSION, seed: r.meta.seed, capital: s.capital, monthly: s.monthly, horizon: s.horizon, alloc: s.allocations, p50: r.net.p50 }));
 
-    if (hiddenPanel) hiddenPanel.setAttribute('hidden', '');
-    return dataUrl;
-  } catch {
-    return null;
-  }
-}
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+  doc.setProperties({ title: 'SimuPortefeuille - Rapport de simulation', subject: 'Simulation Monte Carlo de portefeuille', author: 'SimuPortefeuille', creator: `SimuPortefeuille ${VERSION}` });
+  doc.setLanguage('fr-FR');
 
-export async function generatePDF() {
-  if (!state.simResults) { showError('Lancez d\'abord une simulation.'); return; }
-  if (!window.jspdf) { showError('jsPDF non chargé — vérifiez votre connexion.'); return; }
-
-  showLoading();
-  await new Promise(r => setTimeout(r, 80));
-
-  try {
-    const { jsPDF } = window.jspdf;
-    const { capital, horizon, mensuel, risk, tmi, simResults } = state;
-    const { p10, p25, p50, p75, p90, netP10, netP50, probLoss, probLossInvested, totalInvested, fiscalByVehicle, productMedians } = simResults;
-    const { mu, sigma } = blendedParams(state.allocations, PRODUCTS, CORRELATIONS);
-
-    const docId = Date.now().toString(36).toUpperCase();
-    const fingerprint = await sha256(JSON.stringify({ capital, horizon, mensuel, risk, tmi, p50, netP50, mu, sigma, ts: docId }));
-
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', putOnlyUsedFonts: true, compress: true });
-
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
-    doc.setProperties({
-      title: 'SimuPortefeuille — Rapport de simulation',
-      subject: 'Simulation Monte Carlo de portefeuille financier',
-      author: 'SimuPortefeuille',
-      keywords: 'simulation, portefeuille, Monte Carlo, MBG, risque, finance, fiscalite',
-      creator: 'SimuPortefeuille — jsPDF 2.5.1',
-    });
-    doc.setLanguage('fr-FR');
-
-    const W = 210, H = 297, ML = 14, MR = 14, CW = W - ML - MR;
-    const NAVY = [28, 48, 83], GOLD = [197, 160, 40], WHITE = [255, 255, 255];
-    const LIGHT = [245, 247, 250], MUTED = [100, 116, 139], TEXT = [30, 41, 59], RED = [184, 50, 50];
-
-    let page = 1;
-
-    function header() {
-      doc.setFillColor(...NAVY);
-      doc.rect(0, 0, W, 16, 'F');
-      doc.setFillColor(...GOLD);
-      doc.rect(0, 16, W, 1.2, 'F');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...WHITE);
-      doc.text('SimuPortefeuille', ML, 11);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-      doc.text('Rapport de simulation financière', W / 2, 11, { align: 'center' });
-      doc.text(dateStr, W - MR, 11, { align: 'right' });
-    }
-
-    function footer(pg) {
-      doc.setFillColor(...LIGHT);
-      doc.rect(0, H - 13, W, 13, 'F');
-      doc.setDrawColor(220, 228, 240); doc.setLineWidth(0.3);
-      doc.line(0, H - 13, W, H - 13);
-      doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(...MUTED);
-      doc.text('Simulation à titre indicatif — pas un conseil en investissement.', W / 2, H - 7, { align: 'center' });
-      doc.text(`Page ${pg}`, W - MR, H - 4, { align: 'right' });
-      doc.text(`Réf. ${docId}`, ML, H - 4);
-    }
-
-    function checkY(y, needed) {
-      if (y + needed > H - 18) {
-        doc.addPage(); page++;
-        header(); footer(page);
-        return 22;
-      }
-      return y;
-    }
-
-    function sectionTitle(y, text) {
-      y = checkY(y, 12);
-      doc.setFillColor(...NAVY);
-      doc.rect(ML, y, CW, 7, 'F');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...WHITE);
-      doc.text(text, ML + 3, y + 5);
-      return y + 10;
-    }
-
-    // ── PAGE 1 — Couverture ──
-    header(); footer(1);
-
-    doc.setFillColor(...NAVY);
-    doc.roundedRect(ML, 22, CW, 38, 4, 4, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(...GOLD);
-    doc.text('RAPPORT DE SIMULATION', W / 2, 36, { align: 'center' });
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...WHITE);
-    doc.text('Portefeuille financier — Analyse Monte Carlo corrélée', W / 2, 44, { align: 'center' });
-    doc.text(`Généré le ${dateStr}`, W / 2, 51, { align: 'center' });
-
-    let y = 68;
-    y = sectionTitle(y, 'PARAMÈTRES DE LA SIMULATION');
-    doc.autoTable({
-      startY: y,
-      head: [['Paramètre', 'Valeur']],
-      body: [
-        ['Capital initial', fmtPdf(capital)],
-        ['Horizon de placement', `${horizon} ans`],
-        ['Versements mensuels', fmtPdf(mensuel) + '/mois'],
-        ['Capital total investi', fmtPdf(totalInvested)],
-        ['Profil de risque', risk.charAt(0).toUpperCase() + risk.slice(1)],
-        ['Tranche marginale d\'imposition (TMI)', tmi + ' %'],
-        ['Rendement annuel moyen (mu)', fmtPctPdf(mu)],
-        ['Volatilite annuelle (sigma), correlations incluses', fmtPctPdf(sigma)],
-        ['Nombre de simulations', '10 000'],
-        ['Modele', 'Mouvement Brownien Geometrique correle (pas mensuel)'],
-      ],
-      theme: 'grid',
-      headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 8 },
-      bodyStyles: { fontSize: 8, textColor: TEXT },
-      alternateRowStyles: { fillColor: LIGHT },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 90 }, 1: { cellWidth: 'auto' } },
-      margin: { left: ML, right: MR },
-    });
-    y = doc.lastAutoTable.finalY + 8;
-
-    y = sectionTitle(y, 'ALLOCATION DU PORTEFEUILLE');
-    const allocRows = Object.entries(state.allocations)
-      .filter(([, pct]) => pct > 0)
-      .map(([id, pct]) => {
-        const p = PRODUCTS.find(x => x.id === id);
-        return p ? [p.name, p.vehicleLabel, `${pct}%`, fmtPctPdf(p.mu - (p.ter || 0)), fmtPctPdf(p.sigma)] : null;
-      })
-      .filter(Boolean);
-    doc.autoTable({
-      startY: y,
-      head: [['Support', 'Véhicule', 'Alloc.', 'Rdt μ', 'Vol. σ']],
-      body: allocRows,
-      theme: 'grid',
-      headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
-      bodyStyles: { fontSize: 7.5, textColor: TEXT },
-      alternateRowStyles: { fillColor: LIGHT },
-      columnStyles: { 0: { cellWidth: 65 }, 1: { cellWidth: 35 }, 2: { cellWidth: 18, halign: 'center' }, 3: { cellWidth: 20, halign: 'center' }, 4: { cellWidth: 20, halign: 'center' } },
-      margin: { left: ML, right: MR },
-    });
-
-    // ── PAGE 2 — Indicateurs clés ──
-    doc.addPage(); page++; header(); footer(page);
-    y = 22;
-    y = sectionTitle(y, 'INDICATEURS CLÉS DE PERFORMANCE (NET APRÈS FISCALITÉ)');
-
-    const kpiData = [
-      { label: 'Net median apres fiscalite', value: fmtPdf(netP50), color: [8, 145, 178] },
-      { label: 'Probabilite de perte', value: fmtPctPdf(probLoss), color: [220, 38, 38] },
-      { label: 'Net pessimiste (P10)', value: fmtPdf(netP10), color: [217, 119, 6] },
-      { label: 'Brut median (P50, avant impots)', value: fmtPdf(p50), color: [22, 163, 74] },
-    ];
-    const bw = (CW - 6) / 2, bh = 22;
-    kpiData.forEach((k, i) => {
-      const bx = ML + (i % 2) * (bw + 6);
-      const by = y + Math.floor(i / 2) * (bh + 4);
-      doc.setFillColor(...k.color);
-      doc.roundedRect(bx, by, bw, bh, 3, 3, 'F');
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(...WHITE);
-      doc.text(k.label, bx + 4, by + 6.5);
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
-      doc.text(k.value, bx + 4, by + 16);
-    });
-    y += 2 * (bh + 4) + 8;
-
-    const realNetP50 = realValue(netP50, horizon);
-    doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(...MUTED);
-    doc.text(`Valeur nette médiane en euros constants (inflation ~2,2 %/an) : ${fmtPdf(realNetP50)}`, ML, y);
-    y += 6;
-
-    y = checkY(y, 12);
-    y = sectionTitle(y, 'DISTRIBUTION DES PERCENTILES BRUTS (AVANT IMPÔTS)');
-    doc.autoTable({
-      startY: y,
-      head: [['Percentile', 'Signification', 'Valeur finale brute']],
-      body: [
-        ['P10', '10% des scenarios sont inferieurs', fmtPdf(p10)],
-        ['P25', '25% des scenarios sont inferieurs', fmtPdf(p25)],
-        ['P50', 'Mediane - resultat le plus probable', fmtPdf(p50)],
-        ['P75', '75% des scenarios sont inferieurs', fmtPdf(p75)],
-        ['P90', '90% des scenarios sont inferieurs', fmtPdf(p90)],
-      ],
-      theme: 'grid',
-      headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 8 },
-      bodyStyles: { fontSize: 8, textColor: TEXT },
-      alternateRowStyles: { fillColor: LIGHT },
-      columnStyles: { 0: { cellWidth: 22, halign: 'center', fontStyle: 'bold' }, 1: { cellWidth: 115 }, 2: { cellWidth: 35, halign: 'right' } },
-      margin: { left: ML, right: MR },
-    });
-    y = doc.lastAutoTable.finalY + 8;
-
-    y = checkY(y, 20);
-    const range = PROFILE_SIGMA_RANGES[risk];
-    let matchStatus, borderColor;
-    if (range) {
-      if (sigma > range.max) { matchStatus = 'ATTENTION — Portefeuille plus risque que le profil declare'; borderColor = RED; }
-      else if (sigma < range.min) { matchStatus = 'INFO — Portefeuille plus conservateur que le profil declare'; borderColor = [26, 90, 138]; }
-      else { matchStatus = 'CONFORME — Portefeuille coherent avec le profil declare'; borderColor = [45, 106, 79]; }
-
-      y = sectionTitle(y, 'ADÉQUATION PROFIL / PORTEFEUILLE');
-      doc.setFillColor(...LIGHT);
-      doc.rect(ML, y, CW, 14, 'F');
-      doc.setFillColor(...borderColor);
-      doc.rect(ML, y, 2, 14, 'F');
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(...borderColor);
-      doc.text(matchStatus, ML + 5, y + 6);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...TEXT);
-      doc.text(`Volatilite du portefeuille : ${fmtPctPdf(sigma)} — plage attendue profil ${risk} : ${fmtPctPdf(range.min)} a ${range.max >= 1 ? 'sans limite' : fmtPctPdf(range.max)}`, ML + 5, y + 11);
-      y += 20;
-    }
-
-    // ── PAGE 3 — Graphiques ──
-    doc.addPage(); page++; header(); footer(page);
-    y = 22;
-    y = sectionTitle(y, 'TRAJECTOIRES — ENVELOPPE DE PERCENTILES');
-
-    const prevActiveTab = document.querySelector('.tab-btn.active')?.dataset.tab || 'kpi';
-    activateTab('charts');
-    await new Promise(r => requestAnimationFrame(r));
-
-    const fanImg = captureChart('fan-chart');
-    const distImg = captureChart('dist-chart');
-    const donutImg = captureChart('donut-chart');
-
-    activateTab(prevActiveTab);
-
-    if (fanImg) {
-      const fanCanvas = document.getElementById('fan-chart');
-      const fanH = fanCanvas ? Math.round(CW * fanCanvas.height / fanCanvas.width) : 65;
-      doc.addImage(fanImg, 'PNG', ML, y, CW, Math.min(fanH, 75));
-      y += Math.min(fanH, 75) + 4;
-    }
-    if (distImg) {
-      y = checkY(y, 12);
-      y = sectionTitle(y, 'DISTRIBUTION DES VALEURS FINALES BRUTES (10 000 SIMULATIONS)');
-      const distCanvas = document.getElementById('dist-chart');
-      const distW = CW * 0.62;
-      const distH = distCanvas ? Math.round(distW * distCanvas.height / distCanvas.width) : 52;
-      doc.addImage(distImg, 'PNG', ML, y, distW, Math.min(distH, 60));
-      if (donutImg) {
-        const donutCanvas = document.getElementById('donut-chart');
-        const donutW = CW * 0.33;
-        const donutH = donutCanvas ? Math.round(donutW * donutCanvas.height / donutCanvas.width) : 52;
-        doc.addImage(donutImg, 'PNG', ML + CW * 0.65, y, donutW, Math.min(donutH, 60));
-      }
-      y += Math.min(distH, 60) + 4;
-    }
-
-    // ── PAGE 4 — Détail par support + fiscalité ──
-    doc.addPage(); page++; header(); footer(page);
-    y = 22;
-    y = sectionTitle(y, 'DÉTAIL PAR SUPPORT D\'INVESTISSEMENT');
-
-    const detailRows = Object.entries(state.allocations)
-      .filter(([, pct]) => pct > 0)
-      .map(([id, pct]) => {
-        const p = PRODUCTS.find(x => x.id === id);
-        if (!p) return null;
-        const muNet = p.mu - (p.ter || 0);
-        return [p.name, p.vehicleLabel, `${pct} %`, fmtPctPdf(p.mu), fmtPctPdf(p.ter || 0), fmtPctPdf(muNet), fmtPctPdf(p.sigma), fmtPdf(productMedians[id])];
-      })
-      .filter(Boolean);
-    doc.autoTable({
-      startY: y,
-      head: [['Support', 'Véhicule', 'Alloc.', 'Rdt brut', 'Frais TER', 'Rdt net', 'Vol. σ', 'Val. finale médiane']],
-      body: detailRows,
-      theme: 'grid',
-      headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 7 },
-      bodyStyles: { fontSize: 7, textColor: TEXT },
-      alternateRowStyles: { fillColor: LIGHT },
-      columnStyles: { 0: { cellWidth: 46 }, 1: { cellWidth: 24 }, 2: { cellWidth: 14, halign: 'center' }, 3: { cellWidth: 18, halign: 'center' }, 4: { cellWidth: 16, halign: 'center' }, 5: { cellWidth: 16, halign: 'center' }, 6: { cellWidth: 16, halign: 'center' }, 7: { cellWidth: 32, halign: 'right' } },
-      margin: { left: ML, right: MR },
-    });
-    y = doc.lastAutoTable.finalY + 6;
-
+  const W = 210, H = 297, ML = 14, CW = W - 2 * ML;
+  const NAVY = [29, 78, 216], GOLD = [197, 160, 40], WHITE = [255, 255, 255], LIGHT = [244, 246, 250], MUTED = [91, 107, 130], TEXT = [15, 23, 42];
+  const header = () => {
+    doc.setFillColor(...NAVY); doc.rect(0, 0, W, 15, 'F');
+    doc.setFillColor(...GOLD); doc.rect(0, 15, W, 1, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...WHITE);
+    doc.text('SimuPortefeuille', ML, 10);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+    doc.text('Rapport de simulation', W / 2, 10, { align: 'center' });
+    doc.text(dateStr, W - ML, 10, { align: 'right' });
+  };
+  const footer = () => {
     doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(...MUTED);
-    const nonAddNote = doc.splitTextToSize(
-      'Valeurs medianes indicatives par support, issues de la meme simulation jointe corrélée. Leur somme ne correspond pas exactement a la mediane globale du portefeuille (propriete statistique normale : la mediane d\'une somme differe de la somme des medianes).',
-      CW
-    );
-    doc.text(nonAddNote, ML, y);
-    y += nonAddNote.length * 3.5 + 6;
-
-    y = checkY(y, 12);
-    doc.setFont('helvetica', 'italic'); doc.setFontSize(7); doc.setTextColor(...MUTED);
-    const fiscalNonAddNote = doc.splitTextToSize(
-      'Valeurs medianes indicatives par vehicule, issues de la meme simulation jointe. Leur somme ne correspond pas exactement a la mediane globale du portefeuille (propriete statistique normale).',
-      CW
-    );
-    doc.text(fiscalNonAddNote, ML, y);
-    y += fiscalNonAddNote.length * 3.5 + 4;
-
-    y = sectionTitle(y, 'RÉPARTITION FISCALE PAR VÉHICULE (VALEURS MÉDIANES)');
-    const fiscalRows = [];
-    for (const v of ['Livret', 'PEA', 'AV', 'CTO']) {
-      const d = fiscalByVehicle[v];
-      if (!d) continue;
-      fiscalRows.push([v, fmtPdf(d.capital), fmtPdf(d.finalValue), d.irTax > 0 ? fmtPdf(d.irTax) : '-', d.psTax > 0 ? fmtPdf(d.psTax) : '-', fmtPdf(d.tax), fmtPdf(d.net)]);
-    }
+    doc.text('Outil pedagogique - ne constitue pas un conseil en investissement.', W / 2, H - 8, { align: 'center' });
+    doc.text(`Page ${doc.getCurrentPageInfo().pageNumber}`, W - ML, H - 4, { align: 'right' });
+    doc.text(`Ref. ${docId} - v${VERSION}`, ML, H - 4);
+  };
+  const newPage = () => { doc.addPage(); header(); footer(); return 22; };
+  const ensure = (y, needed) => (y + needed > H - 16 ? newPage() : y);
+  const section = (y, text) => {
+    y = ensure(y, 14);
+    doc.setFillColor(...NAVY); doc.rect(ML, y, CW, 7, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...WHITE);
+    doc.text(ascii(text), ML + 3, y + 5);
+    return y + 10;
+  };
+  const table = (y, head, body, opts = {}) => {
     doc.autoTable({
-      startY: y,
-      head: [['Véhicule', 'Capital', 'Val. fin. méd.', 'dont IR', 'dont PS', 'Total impôts', 'Net récupéré']],
-      body: fiscalRows,
-      theme: 'grid',
+      startY: y, head: head ? [head.map(ascii)] : undefined, body: body.map(row => row.map(ascii)),
+      theme: 'grid', margin: { left: ML, right: ML, top: 22, bottom: 16 },
       headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: 'bold', fontSize: 7.5 },
-      bodyStyles: { fontSize: 7.5, textColor: TEXT },
-      alternateRowStyles: { fillColor: LIGHT },
-      columnStyles: { 0: { fontStyle: 'bold', cellWidth: 25 } },
-      margin: { left: ML, right: MR },
+      bodyStyles: { fontSize: 7.5, textColor: TEXT }, alternateRowStyles: { fillColor: LIGHT },
+      didDrawPage: () => { header(); footer(); },
+      ...opts,
     });
-    y = doc.lastAutoTable.finalY + 8;
+    return doc.lastAutoTable.finalY + 7;
+  };
+  const para = (y, text, size = 8) => {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(size); doc.setTextColor(...TEXT);
+    const lines = doc.splitTextToSize(ascii(text), CW);
+    y = ensure(y, lines.length * size * 0.45);
+    doc.text(lines, ML, y);
+    return y + lines.length * size * 0.42 + 2;
+  };
 
-    // ── PAGE 5 — Méthodologie, fiscalité, avertissements ──
-    doc.addPage(); page++; header(); footer(page);
-    y = 22;
-    y = sectionTitle(y, 'MÉTHODOLOGIE ET AVERTISSEMENTS RÉGLEMENTAIRES');
+  // ── Page 1 : synthèse ──
+  header(); footer();
+  doc.setFillColor(...NAVY); doc.roundedRect(ML, 21, CW, 30, 3, 3, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.setTextColor(...GOLD);
+  doc.text('RAPPORT DE SIMULATION', W / 2, 33, { align: 'center' });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...WHITE);
+  doc.text(ascii(`Monte Carlo correle - fiscalite francaise ${FISCAL.millesime} - ${r.meta.nSims.toLocaleString('fr-FR')} scenarios`), W / 2, 41, { align: 'center' });
+  doc.text(ascii(`Genere le ${dateStr}`), W / 2, 47, { align: 'center' });
 
-    const warnings = [
-      'Ce document est produit a titre purement informatif et pedagogique. Il ne constitue pas un conseil en investissement au sens de la directive MIF II (2014/65/UE).',
-      'Les performances passees ne prejugent pas des performances futures. Les projections resultent d\'un modele stochastique et ne constituent pas des garanties.',
-      'Le Mouvement Brownien Geometrique suppose des rendements log-normalement distribues et une volatilite constante — approximation simplifiee de la realite des marches.',
-      'Les correlations entre actifs risques sont desormais modelisees dans la simulation elle-meme (chocs correles par decomposition de Cholesky, tires a chaque pas mensuel), et non plus approximees a posteriori.',
-      'La fiscalite est calculee scenario par scenario sur le gain reel de chaque vehicule dans ce scenario precis, ce qui garantit la coherence entre les valeurs brutes et nettes affichees.',
-      'Les parametres (mu, sigma) utilises sont des estimations basees sur des donnees historiques moyennes et peuvent differer significativement sur votre horizon d\'investissement.',
-      'La fiscalite francaise est susceptible d\'evoluer. Les calculs sont bases sur la legislation en vigueur au 01/01/2026 et constituent des estimations indicatives ne prenant pas en compte votre situation patrimoniale globale.',
-      'Avant toute decision d\'investissement, consultez un conseiller en gestion de patrimoine (CGP) agree par l\'AMF.',
-    ];
-    doc.autoTable({
-      startY: y,
-      body: warnings.map((w, i) => [`${i + 1}.`, w]),
-      theme: 'plain',
-      bodyStyles: { fontSize: 7.5, textColor: TEXT, cellPadding: { top: 2, bottom: 2, left: 2, right: 4 } },
-      columnStyles: { 0: { cellWidth: 8, fontStyle: 'bold', valign: 'top' } },
-      margin: { left: ML, right: MR },
-    });
-    y = doc.lastAutoTable.finalY + 6;
+  let y = 58;
+  const lvl = riskLevel(r.probLoss);
+  const kpis = [
+    ['Valeur nette mediane', fmtPdf(r.net.p50), [29, 78, 216]],
+    ['Total verse', fmtPdf(r.invested), [71, 85, 105]],
+    ['Probabilite de perte', `${fmtPctPdf(r.probLoss)} (${lvl.label})`, [185, 28, 28]],
+    ['Rendement annualise net median', `${fmtPctPdf(r.irr.p50)}/an`, [21, 128, 61]],
+    ['Scenario defavorable (P10)', fmtPdf(r.net.p10), [180, 83, 9]],
+    ['Scenario favorable (P90)', fmtPdf(r.net.p90), [21, 128, 61]],
+  ];
+  const bw = (CW - 6) / 2, bh = 18;
+  kpis.forEach(([label, value, color], i) => {
+    const bx = ML + (i % 2) * (bw + 6), by = y + Math.floor(i / 2) * (bh + 4);
+    doc.setFillColor(...color); doc.roundedRect(bx, by, bw, bh, 2.5, 2.5, 'F');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...WHITE);
+    doc.text(ascii(label), bx + 4, by + 6);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(12.5);
+    doc.text(ascii(value), bx + 4, by + 14);
+  });
+  y += 3 * (bh + 4) + 4;
+  y = para(y, `En euros d'aujourd'hui (inflation ${fmtPctPdf(s.inflation)}/an), la valeur nette mediane represente ${fmtPdf(r.netReal.p50)}. Dans 8 cas sur 10, la valeur nette finale se situe entre ${fmtPdf(r.net.p10)} et ${fmtPdf(r.net.p90)}. Baisse temporaire mediane en cours de route : ${fmtPctPdf(r.drawdown.p50, 0)}.`);
+  if (r.probTarget !== null) y = para(y, `Probabilite d'atteindre l'objectif de ${fmtPdf(s.target)}${s.targetReal ? " (euros d'aujourd'hui)" : ''} : ${fmtPctPdf(r.probTarget, 0)}.`);
 
-    y = checkY(y, 50);
-    y = sectionTitle(y, 'CERTIFICAT D\'AUTHENTICITÉ DU DOCUMENT');
-    doc.setFillColor(...LIGHT);
-    doc.roundedRect(ML, y, CW, 42, 3, 3, 'F');
-    doc.setDrawColor(...NAVY); doc.setLineWidth(0.4);
-    doc.roundedRect(ML, y, CW, 42, 3, 3, 'S');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...NAVY);
-    doc.text('Empreinte numérique SHA-256 (paramètres de simulation)', ML + 4, y + 7);
-    doc.setFont('courier', 'normal'); doc.setFontSize(8); doc.setTextColor(...TEXT);
-    doc.text(fingerprint.slice(0, 32), ML + 4, y + 14);
-    doc.text(fingerprint.slice(32), ML + 4, y + 20);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...MUTED);
-    doc.text(`Référence document : ${docId}`, ML + 4, y + 28);
-    doc.text(`Date de génération : ${now.toISOString().replace('T', ' ').slice(0, 19)} UTC`, ML + 4, y + 34);
-    doc.text('Produit par : SimuPortefeuille — Application cliente (aucune donnée transmise)', ML + 4, y + 40);
+  y = section(y + 2, 'PARAMETRES');
+  y = table(y, ['Parametre', 'Valeur'], [
+    ['Capital initial / versement mensuel', `${fmtPdf(s.capital)} / ${fmtPdf(s.monthly)} (indexation ${fmtPctPdf(s.contributionGrowth)}/an)`],
+    ['Horizon', `${s.horizon} ans`],
+    ['Profil declare', PROFILES[s.risk].label],
+    ['Fiscalite', `TMI ${s.tmi} % (retraite ${s.tmiRetraite} %), ${s.couple ? 'couple' : 'personne seule'}, anciennete PEA ${s.peaAnciennete} an(s), AV ${s.avAnciennete} an(s)`],
+    ['Hypotheses de rendement', ASSUMPTION_MODES[s.assumptionMode]],
+    ['Portefeuille (analytique, net de frais)', `rendement ${fmtPctPdf(stats.mu)}/an, volatilite ${fmtPctPdf(stats.sigma)}`],
+    ['Modele', `${r.meta.distribution === 'student' ? `Student (nu = ${r.meta.df})` : 'Loi normale'}, pas mensuel, reequilibrage ${r.meta.rebalancing === 'annual' ? 'annuel' : 'aucun'}, graine ${r.meta.seed}`],
+  ], { columnStyles: { 0: { fontStyle: 'bold', cellWidth: 70 } } });
 
-    const filename = `SimuPortefeuille_${risk}_${horizon}ans_${docId}.pdf`;
-    doc.save(filename);
-  } catch (err) {
-    console.error('PDF generation error:', err);
-    showError('Erreur lors de la génération du PDF. Réessayez ou contactez le support.');
-  } finally {
-    hideLoading();
+  // ── Page 2 : graphiques ──
+  y = newPage();
+  y = section(y, 'TRAJECTOIRES POSSIBLES (VALEUR BRUTE, PERCENTILES)');
+  if (images.fan) { const h = Math.min(CW * images.fan.ratio, 85); doc.addImage(images.fan.data, 'PNG', ML, y, CW, h); y += h + 4; }
+  y = section(y, 'DISTRIBUTION DE LA VALEUR NETTE FINALE ET REPARTITION');
+  if (images.dist) { const w = CW * 0.58, h = Math.min(w * images.dist.ratio, 70); doc.addImage(images.dist.data, 'PNG', ML, y, w, h); }
+  if (images.donut) { const w = CW * 0.38, h = Math.min(w * images.donut.ratio, 70); doc.addImage(images.donut.data, 'PNG', ML + CW * 0.62, y, w, h); }
+  y += 74;
+  y = section(y, 'PERCENTILES DE VALEUR FINALE');
+  y = table(y, ['Percentile', 'Brut', 'Net', "Net en euros d'aujourd'hui"],
+    ['p5', 'p10', 'p25', 'p50', 'p75', 'p90', 'p95'].map(k => [k.toUpperCase(), fmtPdf(r.gross[k]), fmtPdf(r.net[k]), fmtPdf(r.netReal[k])]),
+    { columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } } });
+
+  // ── Page 3 : allocation et fiscalité ──
+  y = newPage();
+  y = section(y, 'ALLOCATION ET HYPOTHESES PAR SUPPORT');
+  y = table(y, ['Support', 'Env.', 'Alloc.', 'Rdt brut', 'Frais', 'Vol.', 'Source', 'Verse', 'Val. mediane'],
+    s.plan.resolved.map(({ product: p, assumption: a, fee }) => [
+      p.name, VEHICLES[p.vehicle].short, `${s.allocations[p.id]} %`, fmtPctPdf(a.mu), fmtPctPdf(fee, 2), a.sigma > 0 ? fmtPctPdf(a.sigma) : 'garanti',
+      a.source, fmtPdf(r.lines[p.id].invested), fmtPdf(r.lines[p.id].p50),
+    ]), { styles: { fontSize: 6.8 }, columnStyles: { 0: { cellWidth: 45 } } });
+  y = section(y, 'FISCALITE PAR ENVELOPPE (VALEURS MEDIANES)');
+  y = table(y, ['Enveloppe', 'Verse', 'Valeur finale', 'IR', 'PS', 'Net'],
+    VEHICLE_ORDER.filter(v => r.vehicles[v]).map(v => {
+      const d = r.vehicles[v];
+      return [VEHICLES[v].label, fmtPdf(d.invested), fmtPdf(d.value), d.ir > 0.5 ? fmtPdf(d.ir) : '-', d.ps > 0.5 ? fmtPdf(d.ps) : '-', fmtPdf(d.net)];
+    }));
+  y = para(y, `Impots de sortie medians : ${fmtPdf(r.taxes.exitP50)}. Frais de gestion cumules medians : ${fmtPdf(r.fees.managementP50)}${r.fees.entry > 0 ? `, frais sur versements : ${fmtPdf(r.fees.entry)}` : ''}.${r.taxes.lifetimeP50 > 0 ? ` Impots payes en cours de route (revenus fonciers) : ${fmtPdf(r.taxes.lifetimeP50)}.` : ''}${r.taxes.perSaving > 0 ? ` Economie d'impot PER a l'entree : ${fmtPdf(r.taxes.perSaving)}.` : ''} Les medianes par colonne ne s'additionnent pas exactement (la mediane d'une somme n'est pas la somme des medianes).`, 7.5);
+
+  const warnings = allocationWarnings(s, CATALOG, stats);
+  if (warnings.length) {
+    y = section(y + 2, 'POINTS D\'ATTENTION');
+    for (const w of warnings) y = para(y, `- ${w.text}`, 7.5);
   }
+
+  // ── Page 4 : méthodologie ──
+  y = newPage();
+  y = section(y, 'METHODOLOGIE ET AVERTISSEMENTS');
+  const notes = [
+    'Document produit a titre informatif et pedagogique ; il ne constitue pas un conseil en investissement au sens de la directive MIF II. Les performances passees ne prejugent pas des performances futures.',
+    'Chaque support suit un mouvement brownien geometrique a pas mensuel, avec des chocs correles (decomposition de Cholesky). Livrets et fonds en euros evoluent a taux fixe. Les frais sont deduits du rendement chaque mois.',
+    'La fiscalite de sortie est calculee scenario par scenario, par enveloppe, sur le gain reel de chaque scenario (rachat total a l\'horizon), selon les regles en vigueur en 2026 : PS 18,6 % (PEA, CTO, PER, crypto) ou 17,2 % (assurance-vie, revenus fonciers), PFU 12,8 % d\'IR, abattement AV de 4 600 / 9 200 EUR apres 8 ans.',
+    `Hypotheses de rendement : ${ASSUMPTION_MODES[s.assumptionMode]}.${s.market ? ` Donnees de marche du ${new Date(s.market.generatedAt).toLocaleDateString('fr-FR')} (Yahoo Finance, Eurostat, BCE).` : ''} Ces parametres sont des estimations et peuvent differer fortement de la realite.`,
+    'Limites : volatilites et correlations constantes, pas de retraits intermediaires, pas d\'effet de progressivite du bareme sur la sortie du PER, prelevements sociaux annuels des fonds en euros non modelises.',
+    'Avant toute decision, consultez un conseiller en investissements financiers (CIF) ou un conseiller en gestion de patrimoine.',
+  ];
+  y = table(y, null, notes.map((n, i) => [`${i + 1}.`, n]), { theme: 'plain', columnStyles: { 0: { cellWidth: 8, fontStyle: 'bold' } } });
+
+  y = section(ensure(y, 50), 'TRACABILITE');
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...TEXT);
+  doc.text(ascii(`Reference : ${docId} - SimuPortefeuille v${VERSION} - fiscalite ${FISCAL.millesime}`), ML, y + 2);
+  doc.text(ascii(`Graine aleatoire : ${r.meta.seed} (reproduit exactement ces resultats avec les memes parametres)`), ML, y + 7);
+  doc.text('Empreinte SHA-256 des parametres et du resultat :', ML, y + 12);
+  doc.setFont('courier', 'normal');
+  doc.text(fingerprint.slice(0, 32), ML, y + 17);
+  doc.text(fingerprint.slice(32), ML, y + 21);
+  doc.setFont('helvetica', 'normal');
+  doc.text(ascii(`Genere le ${now.toISOString().replace('T', ' ').slice(0, 19)} UTC dans le navigateur - aucune donnee personnelle transmise.`), ML, y + 27);
+
+  doc.save(`SimuPortefeuille_${s.horizon}ans_${docId}.pdf`);
 }

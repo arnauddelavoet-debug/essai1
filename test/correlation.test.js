@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCorrelationMatrix, cholesky, applyCholesky } from '../src/correlation.js';
+import { buildCorrelationMatrix, cholesky, choleskyStrict, choleskyRegularized, applyCholesky } from '../src/engine/correlation.js';
 
 test('buildCorrelationMatrix place 1 sur la diagonale et 0 pour les paires non renseignées', () => {
   const correlations = { a: { b: 0.5 } };
@@ -48,6 +48,26 @@ test('cholesky se régularise sans planter sur une matrice non définie positive
       assert.ok(Number.isFinite(v), 'chaque terme de L doit être fini (pas de NaN)');
     }
   }
+});
+
+test('choleskyStrict refuse une matrice non définie positive', () => {
+  assert.equal(choleskyStrict([[1, 0.9, 0.9], [0.9, 1, -0.9], [0.9, -0.9, 1]]), null);
+  assert.ok(choleskyStrict([[1, 0.5], [0.5, 1]]));
+});
+
+test('choleskyRegularized : aucune régularisation si la matrice est valide', () => {
+  assert.equal(choleskyRegularized([[1, 0.5], [0.5, 1]]).shrinkage, 0);
+});
+
+test('choleskyRegularized rétrécit vers l\'identité le minimum nécessaire', () => {
+  const m = [[1, 0.9, 0.9], [0.9, 1, -0.9], [0.9, -0.9, 1]];
+  const { L, shrinkage } = choleskyRegularized(m);
+  assert.ok(shrinkage > 0 && shrinkage < 1);
+  // La matrice régularisée reconstruite conserve le signe des corrélations.
+  const rec01 = L[1][0] * L[0][0];
+  const rec12 = L[2][0] * L[1][0] + L[2][1] * L[1][1];
+  assert.ok(rec01 > 0 && rec12 < 0);
+  assert.ok(Math.abs(rec01 - (1 - shrinkage) * 0.9) < 1e-9);
 });
 
 test('applyCholesky sur une matrice identité ne modifie pas les chocs (aucune corrélation)', () => {

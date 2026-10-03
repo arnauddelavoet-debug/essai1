@@ -5,384 +5,457 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <!--
     Content-Security-Policy :
-    • script-src sans 'unsafe-inline' → aucun gestionnaire inline (onclick…)
-    • style-src 'unsafe-inline' nécessaire pour les styles dynamiques Chart.js / jsPDF
-    • img-src data: requis pour les captures canvas → PDF
-    • connect-src 'self' + vitals.vercel-insights.com : Vercel Web Analytics
+    • script-src sans 'unsafe-inline' : aucun script ni gestionnaire inline
+    • worker-src 'self' : le moteur Monte Carlo tourne dans un Web Worker
+    • connect-src 'self' : /api/market et data/market-snapshot.json (même origine)
+      + Vercel Web Analytics
+    • style-src 'unsafe-inline' requis par Chart.js (styles dynamiques)
+    • img-src data: blob: requis pour les captures de graphiques vers le PDF
+    • frame-ancestors n'est pas supporté en balise meta : il est envoyé en
+      en-tête HTTP (vercel.json)
   -->
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none';
                  script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
+                 worker-src 'self';
                  style-src 'self' 'unsafe-inline';
                  img-src 'self' data: blob:;
                  font-src 'self';
                  connect-src 'self' https://vitals.vercel-insights.com;
-                 frame-ancestors 'none';
                  base-uri 'self';
                  form-action 'none';" />
   <meta name="description"
-        content="SimuPortefeuille — Simulation Monte Carlo de portefeuille financier et analyse de risque" />
-  <title>SimuPortefeuille — Simulation d'actifs financiers</title>
-
-  <!-- Chart.js 4.4.0 (crossorigin pour SRI futur) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"
-          crossorigin="anonymous"></script>
-  <!-- jsPDF 2.5.1 + AutoTable 3.8.2 -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"
-          crossorigin="anonymous"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"
-          crossorigin="anonymous"></script>
-
+        content="SimuPortefeuille — simulateur Monte Carlo pédagogique de portefeuille financier, fiscalité française 2026 (PEA, assurance-vie, PER, CTO, SCPI), données de marché en direct." />
+  <meta name="theme-color" content="#1d4ed8" />
+  <title>SimuPortefeuille — Simulation de portefeuille et fiscalité française</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="style.css" />
+
+  <!-- Chart.js 4.4.0 (intégrité vérifiée). jsPDF est chargé à la demande, à l'export. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"
+          integrity="sha384-e6nUZLBkQ86NJ6TVVKAeSaK8jWa3NhkYWZFomE39AvDbQWeie9PlQqM3pmYW5d1g"
+          crossorigin="anonymous"></script>
+  <script type="module" src="src/main.js"></script>
+  <!-- Vercel Web Analytics (sans cookie) -->
+  <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
 
-<!-- ── LOADING OVERLAY ── -->
-<div id="loading-overlay" class="loading-overlay" hidden aria-live="polite" aria-label="Simulation en cours">
-  <div class="spinner"></div>
-  <p class="loading-text">Simulation Monte Carlo en cours…<br><small>10 000 scénarios</small></p>
+<a class="skip-link" href="#main">Aller au contenu</a>
+
+<div id="loading-overlay" class="loading-overlay" hidden>
+  <div class="loading-box" role="status" aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="loading-text" id="loading-text">Simulation en cours…</p>
+    <div class="progress" aria-hidden="true"><div class="progress-bar" id="progress-bar"></div></div>
+  </div>
 </div>
 
-<!-- ── ERROR BANNER ── -->
-<div id="error-banner" class="error-banner" hidden role="alert"></div>
+<div id="toast" class="toast" hidden role="alert"></div>
 
-<header>
+<header class="app-header">
   <div class="header-inner">
     <div class="logo">
       <span class="logo-icon" aria-hidden="true">📊</span>
       <span class="logo-text">SimuPortefeuille</span>
+      <span class="version-badge" id="app-version"></span>
     </div>
-    <p class="header-sub">Simulation de portefeuille financier &amp; analyse de risque</p>
+    <p class="header-sub">Simulation Monte Carlo &amp; fiscalité française 2026</p>
+    <div class="header-actions">
+      <span class="market-badge" id="market-badge" data-state="loading" title="Source des données de marché">Marché : chargement…</span>
+      <button type="button" class="btn-icon" id="btn-guide" aria-haspopup="dialog">📘 Guide</button>
+      <button type="button" class="btn-icon" id="btn-theme" aria-label="Basculer le thème clair / sombre">🌓</button>
+    </div>
   </div>
 </header>
 
-<main>
-  <!-- ── STEPPER ── -->
+<main id="main">
   <nav class="stepper" aria-label="Progression">
-    <div class="step active" data-step="1" aria-current="step">
-      <div class="step-circle">1</div>
-      <span>Profil</span>
-    </div>
-    <div class="step-line" role="presentation"></div>
-    <div class="step" data-step="2">
-      <div class="step-circle">2</div>
-      <span>Allocation</span>
-    </div>
-    <div class="step-line" role="presentation"></div>
-    <div class="step" data-step="3">
-      <div class="step-circle">3</div>
-      <span>Résultats</span>
-    </div>
+    <button type="button" class="step active" data-step="1" aria-current="step"><span class="step-circle">1</span><span>Situation</span></button>
+    <span class="step-line" aria-hidden="true"></span>
+    <button type="button" class="step" data-step="2"><span class="step-circle">2</span><span>Allocation</span></button>
+    <span class="step-line" aria-hidden="true"></span>
+    <button type="button" class="step" data-step="3" disabled><span class="step-circle">3</span><span>Résultats</span></button>
   </nav>
 
-  <!-- ═══════════════════════════════════════════
-       ÉTAPE 1 — PROFIL
-  ═══════════════════════════════════════════ -->
-  <section id="step-1" class="card step-panel active" aria-label="Étape 1 : Profil investisseur">
-    <h2>Votre profil d'investisseur</h2>
+  <!-- ═══════════════ ÉTAPE 1 — SITUATION ═══════════════ -->
+  <section id="step-1" class="card step-panel active" aria-labelledby="step-1-title">
+    <h2 id="step-1-title">Votre situation et votre projet</h2>
 
-    <div class="form-group">
-      <label for="capital">
-        Capital initial (€)
-        <span class="info-icon" data-tooltip="Montant que vous investissez au départ. Min : 100 € — Max : 1 000 000 €.">ⓘ</span>
-      </label>
-      <div class="input-row">
-        <input type="range" id="capital-slider" min="1000" max="200000" step="1000" value="10000"
-               aria-label="Capital initial (curseur)" />
-        <input type="number" id="capital" min="100" max="1000000" value="10000"
-               aria-label="Capital initial en euros" inputmode="numeric" />
-      </div>
-    </div>
+    <div class="form-grid form-grid--2">
+      <fieldset class="panel">
+        <legend>Projet d'épargne</legend>
 
-    <div class="form-group">
-      <label for="horizon">
-        Horizon de placement
-        <span class="info-icon" data-tooltip="Durée pendant laquelle vous immobilisez votre capital. Plus l'horizon est long, plus les actifs risqués peuvent être envisagés.">ⓘ</span>
-      </label>
-      <div class="input-row">
-        <input type="range" id="horizon-slider" min="1" max="30" step="1" value="10"
-               aria-label="Horizon de placement (curseur)" />
-        <div class="input-with-unit">
-          <input type="number" id="horizon" min="1" max="30" value="10"
-                 aria-label="Horizon en années" inputmode="numeric" />
-          <span class="unit">ans</span>
+        <div class="form-group">
+          <label for="capital">Capital initial
+            <button type="button" class="info" data-tip="Somme placée dès le départ. Elle bénéficie de toute la durée de capitalisation.">?</button>
+          </label>
+          <div class="input-row">
+            <input type="range" id="capital-slider" min="0" max="300000" step="1000" aria-label="Capital initial (curseur)" />
+            <div class="input-with-unit"><input type="number" id="capital" min="0" max="10000000" step="100" inputmode="decimal" /><span class="unit">€</span></div>
+          </div>
         </div>
-      </div>
-    </div>
 
-    <div class="form-group">
-      <fieldset class="fieldset-reset">
-        <legend class="form-label">
-          Tolérance au risque
-          <span class="info-icon" data-tooltip="Votre capacité psychologique et financière à supporter des baisses temporaires de portefeuille. Influe sur les produits proposés.">ⓘ</span>
-        </legend>
-        <div class="risk-cards">
-          <label class="risk-card">
-            <input type="radio" name="risk" value="conservateur" checked />
-            <div class="risk-card-inner">
-              <span class="risk-icon" aria-hidden="true">🛡️</span>
-              <strong>Conservateur</strong>
-              <p>Priorité à la préservation du capital. Faible volatilité.</p>
-            </div>
+        <div class="form-group">
+          <label for="monthly">Versement mensuel
+            <button type="button" class="info" data-tip="Épargne programmée chaque mois, répartie selon votre allocation. Investir régulièrement lisse le prix d'achat (« DCA »).">?</button>
           </label>
-          <label class="risk-card">
-            <input type="radio" name="risk" value="modere" />
-            <div class="risk-card-inner">
-              <span class="risk-icon" aria-hidden="true">⚖️</span>
-              <strong>Modéré</strong>
-              <p>Équilibre rendement/risque. Volatilité maîtrisée.</p>
-            </div>
-          </label>
-          <label class="risk-card">
-            <input type="radio" name="risk" value="dynamique" />
-            <div class="risk-card-inner">
-              <span class="risk-icon" aria-hidden="true">🚀</span>
-              <strong>Dynamique</strong>
-              <p>Recherche de performance. Accepte la volatilité.</p>
-            </div>
-          </label>
+          <div class="input-row">
+            <input type="range" id="monthly-slider" min="0" max="3000" step="25" aria-label="Versement mensuel (curseur)" />
+            <div class="input-with-unit"><input type="number" id="monthly" min="0" max="50000" step="10" inputmode="decimal" /><span class="unit">€/mois</span></div>
+          </div>
         </div>
+
+        <div class="form-group">
+          <label for="horizon">Horizon de placement
+            <button type="button" class="info" data-tip="Durée jusqu'au retrait. Plus elle est longue, plus les fluctuations des actions se compensent — et plus les avantages fiscaux (PEA 5 ans, AV 8 ans) s'appliquent.">?</button>
+          </label>
+          <div class="input-row">
+            <input type="range" id="horizon-slider" min="1" max="50" step="1" aria-label="Horizon (curseur)" />
+            <div class="input-with-unit"><input type="number" id="horizon" min="1" max="50" step="1" inputmode="numeric" /><span class="unit">ans</span></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="target">Objectif de capital (facultatif)
+            <button type="button" class="info" data-tip="Montant net d'impôts que vous souhaitez atteindre. Le simulateur calcule la probabilité d'y parvenir.">?</button>
+          </label>
+          <div class="input-row">
+            <div class="input-with-unit"><input type="number" id="target" min="0" step="1000" inputmode="decimal" placeholder="ex. 100 000" /><span class="unit">€</span></div>
+            <label class="check"><input type="checkbox" id="targetReal" /> en euros d'aujourd'hui</label>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="panel">
+        <legend>Fiscalité du foyer</legend>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="tmi">Tranche marginale (TMI)
+              <button type="button" class="info" data-tip="Taux d'imposition de la dernière tranche de vos revenus. Détermine l'intérêt de l'option pour le barème, du PER et la fiscalité des loyers de SCPI.">?</button>
+            </label>
+            <select id="tmi"></select>
+          </div>
+          <div class="form-group">
+            <label for="couple">Imposition</label>
+            <select id="couple">
+              <option value="false">Personne seule</option>
+              <option value="true">Couple (imposition commune)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="peaAnciennete">PEA déjà ouvert depuis
+              <button type="button" class="info" data-tip="L'ancienneté fiscale court depuis le 1er versement : un PEA ouvert il y a 3 ans sera exonéré d'IR dans 2 ans.">?</button>
+            </label>
+            <div class="input-with-unit"><input type="number" id="peaAnciennete" min="0" max="50" step="1" /><span class="unit">ans</span></div>
+          </div>
+          <div class="form-group">
+            <label for="avAnciennete">Assurance-vie ouverte depuis</label>
+            <div class="input-with-unit"><input type="number" id="avAnciennete" min="0" max="50" step="1" /><span class="unit">ans</span></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="tmiRetraite">TMI à la retraite (PER)
+            <button type="button" class="info" data-tip="À la sortie du PER, les versements déduits sont imposés au barème : l'intérêt du PER dépend de l'écart entre TMI actuelle et TMI à la retraite.">?</button>
+          </label>
+          <select id="tmiRetraite"></select>
+        </div>
+      </fieldset>
+
+      <fieldset class="panel panel--wide">
+        <legend>Tolérance au risque</legend>
+        <div class="risk-cards" id="risk-cards"></div>
+        <p class="hint">Le profil pré-remplit une allocation de départ que vous pourrez modifier librement à l'étape suivante.</p>
       </fieldset>
     </div>
 
-    <div class="form-group">
-      <label for="mensuel">
-        Versements mensuels (optionnel)
-        <span class="info-icon" data-tooltip="Montant versé chaque mois en sus du capital initial. Augmente significativement le capital final par l'effet de capitalisation.">ⓘ</span>
-      </label>
-      <div class="input-row">
-        <input type="range" id="mensuel-slider" min="0" max="2000" step="50" value="0"
-               aria-label="Versements mensuels (curseur)" />
-        <div class="input-with-unit">
-          <input type="number" id="mensuel" min="0" max="10000" value="0"
-                 aria-label="Versements mensuels en euros" inputmode="numeric" />
-          <span class="unit">€/mois</span>
-        </div>
+    <details class="advanced" id="advanced">
+      <summary>⚙️ Paramètres avancés <span class="hint">hypothèses de marché, frais, modèle statistique</span></summary>
+      <div class="form-grid">
+        <fieldset class="panel">
+          <legend>Hypothèses de rendement</legend>
+          <div class="form-group">
+            <label for="assumptionMode">Source des hypothèses
+              <button type="button" class="info" data-tip="Prospectif : estimations long terme prudentes. Historique : rendement et volatilité mesurés sur 10 ans de cours réels (les 10 dernières années ont été exceptionnelles pour les actions US). Mixte : moyenne des deux.">?</button>
+            </label>
+            <select id="assumptionMode"></select>
+            <p class="hint" id="market-status"></p>
+          </div>
+          <div class="form-group">
+            <label for="inflation">Inflation annuelle moyenne</label>
+            <div class="input-row">
+              <div class="input-with-unit"><input type="number" id="inflation" min="-2" max="15" step="0.1" /><span class="unit">%</span></div>
+              <button type="button" class="btn btn-small" id="btn-use-inflation" hidden></button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="contributionGrowth">Indexation annuelle des versements</label>
+            <div class="input-with-unit"><input type="number" id="contributionGrowth" min="0" max="10" step="0.5" /><span class="unit">%/an</span></div>
+          </div>
+        </fieldset>
+
+        <fieldset class="panel">
+          <legend>Frais des enveloppes</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="feeAV">Frais de gestion AV (UC)</label>
+              <div class="input-with-unit"><input type="number" id="feeAV" min="0" max="3" step="0.05" /><span class="unit">%/an</span></div>
+            </div>
+            <div class="form-group">
+              <label for="feePER">Frais de gestion PER (UC)</label>
+              <div class="input-with-unit"><input type="number" id="feePER" min="0" max="3" step="0.05" /><span class="unit">%/an</span></div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="perCap">Plafond annuel de déduction PER</label>
+            <div class="input-with-unit"><input type="number" id="perCap" min="0" max="100000" step="100" /><span class="unit">€/an</span></div>
+          </div>
+          <div class="form-group">
+            <label for="bareme">Imposition des revenus du capital
+              <button type="button" class="info" data-tip="Le PFU (flat tax) est la règle ; l'option pour le barème progressif est globale et annuelle. « Automatique » retient le plus favorable dans chaque scénario.">?</button>
+            </label>
+            <select id="bareme">
+              <option value="auto">Automatique (le plus favorable)</option>
+              <option value="pfu">PFU (flat tax)</option>
+              <option value="bareme">Option pour le barème progressif</option>
+            </select>
+          </div>
+        </fieldset>
+
+        <fieldset class="panel">
+          <legend>Modèle statistique</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="nSims">Scénarios simulés</label>
+              <select id="nSims"></select>
+            </div>
+            <div class="form-group">
+              <label for="rebalancing">Rééquilibrage
+                <button type="button" class="info" data-tip="Chaque année, les lignes d'une même enveloppe (PEA, AV, PER) sont ramenées à leurs poids cibles — sans fiscalité, car les arbitrages internes n'y sont pas imposés.">?</button>
+              </label>
+              <select id="rebalancing">
+                <option value="annual">Annuel (PEA, AV, PER)</option>
+                <option value="none">Aucun</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="distribution">Loi des rendements
+                <button type="button" class="info" data-tip="La loi normale sous-estime la fréquence des krachs. La loi de Student (« queues épaisses ») génère des chocs extrêmes plus fréquents et simultanés sur tous les actifs, à volatilité égale.">?</button>
+              </label>
+              <select id="distribution">
+                <option value="normal">Normale (classique)</option>
+                <option value="student">Queues épaisses (Student)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="df">Degrés de liberté</label>
+              <input type="number" id="df" min="3" max="30" step="1" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="seed">Graine aléatoire
+              <button type="button" class="info" data-tip="Laissez vide pour un tirage nouveau à chaque simulation. Une graine fixe rend les résultats exactement reproductibles (et partageables).">?</button>
+            </label>
+            <input type="number" id="seed" min="0" max="4294967295" step="1" placeholder="aléatoire" />
+          </div>
+        </fieldset>
       </div>
-    </div>
-
-    <div class="form-group">
-      <label for="tmi">
-        Tranche Marginale d'Imposition (TMI)
-        <span class="info-icon" data-tooltip="Votre taux d'imposition sur le revenu le plus élevé. Utilisé pour estimer la fiscalité applicable aux plus-values (CTO, assurance-vie après 8 ans).">ⓘ</span>
-      </label>
-      <select id="tmi" aria-label="Tranche marginale d'imposition">
-        <option value="0">0 % (non imposable)</option>
-        <option value="11">11 %</option>
-        <option value="30" selected>30 %</option>
-        <option value="41">41 %</option>
-        <option value="45">45 %</option>
-      </select>
-    </div>
+      <div class="btn-row btn-row--left">
+        <button type="button" class="btn btn-outline btn-small" id="btn-reset-params">Réinitialiser tous les paramètres</button>
+      </div>
+    </details>
 
     <div class="btn-row">
-      <button class="btn btn-primary" id="btn-step1-next">Suivant →</button>
+      <button type="button" class="btn btn-primary" id="btn-step1-next">Composer mon allocation →</button>
     </div>
   </section>
 
-  <!-- ═══════════════════════════════════════════
-       ÉTAPE 2 — ALLOCATION
-  ═══════════════════════════════════════════ -->
-  <section id="step-2" class="card step-panel" aria-label="Étape 2 : Allocation">
-    <h2>Allocation par produit</h2>
-    <p class="hint">
-      Les allocations sont pré-configurées selon votre profil. Excluez un support pour redistribuer automatiquement son allocation.
-      <span class="info-icon" data-tooltip="Les pourcentages sont calculés automatiquement selon le profil choisi. Cliquez sur '× Exclure' pour retirer un support — les autres sont recalculés proportionnellement.">ⓘ</span>
-    </p>
+  <!-- ═══════════════ ÉTAPE 2 — ALLOCATION ═══════════════ -->
+  <section id="step-2" class="card step-panel" aria-labelledby="step-2-title" hidden>
+    <h2 id="step-2-title">Composez votre allocation</h2>
+    <p class="hint">Partez d'un profil puis ajustez chaque ligne. Dépliez « Hypothèses &amp; frais » sur un support pour modifier son rendement, sa volatilité ou ses frais.</p>
 
-    <div id="allocation-suggestions" class="suggestion-bar" role="status"></div>
-
-    <div class="products-scroll" role="list" aria-label="Produits disponibles">
-      <div class="products-grid" id="products-grid"></div>
+    <div class="toolbar">
+      <div class="toolbar-group" role="group" aria-label="Allocations types">
+        <span class="toolbar-label">Partir de :</span>
+        <span id="preset-buttons"></span>
+        <button type="button" class="chip" id="btn-clear-alloc">Tout vider</button>
+      </div>
+      <div class="toolbar-group" role="group" aria-label="Filtrer par enveloppe" id="vehicle-filters"></div>
+      <label class="check"><input type="checkbox" id="only-allocated" /> Lignes allouées uniquement</label>
     </div>
 
-    <div class="total-bar" aria-live="polite">
-      <span>Total alloué :</span>
-      <span id="total-pct" class="total-pct neutral">0 %</span>
+    <div class="alloc-summary" id="alloc-summary" aria-live="polite">
+      <div class="alloc-summary-top">
+        <span>Total : <strong id="total-pct" class="total-pct">0 %</strong></span>
+        <span class="alloc-metrics" id="alloc-metrics"></span>
+        <button type="button" class="btn btn-small" id="btn-normalize">Ajuster à 100 %</button>
+      </div>
+      <div class="alloc-bar" id="alloc-bar" aria-hidden="true"></div>
     </div>
+
+    <div id="products-container"></div>
+
+    <div class="warnings" id="alloc-warnings" aria-live="polite"></div>
 
     <div class="btn-row">
-      <button class="btn btn-secondary" id="btn-step2-back">← Retour</button>
-      <button class="btn btn-primary" id="simulate-btn" disabled>Simuler →</button>
+      <button type="button" class="btn btn-secondary" id="btn-step2-back">← Situation</button>
+      <button type="button" class="btn btn-primary" id="simulate-btn" disabled>Lancer la simulation →</button>
     </div>
   </section>
 
-  <!-- ═══════════════════════════════════════════
-       ÉTAPE 3 — RÉSULTATS
-  ═══════════════════════════════════════════ -->
-  <section id="step-3" class="card step-panel" aria-label="Étape 3 : Résultats">
+  <!-- ═══════════════ ÉTAPE 3 — RÉSULTATS ═══════════════ -->
+  <section id="step-3" class="card step-panel" aria-labelledby="step-3-title" hidden>
     <div class="results-header">
-      <h2>Résultats de la simulation</h2>
+      <h2 id="step-3-title">Résultats de la simulation</h2>
       <p class="hint" id="sim-subtitle"></p>
     </div>
 
-    <!-- Onglets -->
-    <nav class="tabs" role="tablist" aria-label="Sections des résultats">
-      <button class="tab-btn active" role="tab" aria-selected="true"
-              aria-controls="tab-kpi" id="tbtn-kpi" data-tab="kpi">
-        📊 Indicateurs
-      </button>
-      <button class="tab-btn" role="tab" aria-selected="false"
-              aria-controls="tab-charts" id="tbtn-charts" data-tab="charts">
-        📈 Graphiques
-      </button>
-      <button class="tab-btn" role="tab" aria-selected="false"
-              aria-controls="tab-detail" id="tbtn-detail" data-tab="detail">
-        📋 Détail
-      </button>
-    </nav>
-
-    <!-- ─── Onglet 1 : Indicateurs clés ─── -->
-    <div id="tab-kpi" class="tab-panel active" role="tabpanel" aria-labelledby="tbtn-kpi">
-      <div class="kpi-grid">
-        <div class="kpi-card kpi-danger">
-          <div class="kpi-label">
-            Probabilité de perte
-            <span class="info-icon info-icon--sm" data-tooltip="Fraction des 10 000 scénarios dans lesquels la valeur finale est inférieure au capital investi.">ⓘ</span>
-          </div>
-          <div class="kpi-value" id="kpi-loss">—</div>
-          <div class="kpi-sub" id="kpi-loss-sub"></div>
-        </div>
-        <div class="kpi-card kpi-info">
-          <div class="kpi-label">
-            Valeur médiane
-            <span class="info-icon info-icon--sm" data-tooltip="La médiane (50e percentile) : 50 % des simulations donnent un résultat inférieur, 50 % supérieur.">ⓘ</span>
-          </div>
-          <div class="kpi-value" id="kpi-median">—</div>
-          <div class="kpi-sub" id="kpi-median-sub"></div>
-        </div>
-        <div class="kpi-card kpi-success">
-          <div class="kpi-label">
-            Scénario optimiste
-            <span class="info-icon info-icon--sm" data-tooltip="90e percentile : seulement 10 % des simulations dépassent cette valeur.">ⓘ</span>
-          </div>
-          <div class="kpi-value" id="kpi-p90">—</div>
-          <div class="kpi-sub" id="kpi-p90-sub"></div>
-        </div>
-        <div class="kpi-card kpi-warning">
-          <div class="kpi-label">
-            Scénario pessimiste
-            <span class="info-icon info-icon--sm" data-tooltip="10e percentile : 10 % des simulations sont inférieures à cette valeur.">ⓘ</span>
-          </div>
-          <div class="kpi-value" id="kpi-p10">—</div>
-          <div class="kpi-sub" id="kpi-p10-sub"></div>
-        </div>
-      </div>
-
-      <div class="gauge-section">
-        <h3>
-          Niveau de risque global
-          <span class="info-icon info-icon--sm" data-tooltip="Basé sur la probabilité de ne pas récupérer le capital initial sur l'horizon choisi.">ⓘ</span>
-        </h3>
-        <div class="gauge-wrap">
-          <canvas id="gauge-chart" width="280" height="150"></canvas>
-          <div class="gauge-label" id="gauge-label" aria-live="polite">—</div>
-        </div>
-      </div>
-
-      <div class="explainer" id="risk-explainer"></div>
+    <div class="tabs" role="tablist" aria-label="Sections des résultats">
+      <button class="tab-btn active" role="tab" aria-selected="true" aria-controls="tab-kpi" id="tbtn-kpi" data-tab="kpi">Synthèse</button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-charts" id="tbtn-charts" data-tab="charts" tabindex="-1">Graphiques</button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-fiscal" id="tbtn-fiscal" data-tab="fiscal" tabindex="-1">Fiscalité &amp; frais</button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-detail" id="tbtn-detail" data-tab="detail" tabindex="-1">Détail</button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-method" id="tbtn-method" data-tab="method" tabindex="-1">Hypothèses</button>
     </div>
 
-    <!-- ─── Onglet 2 : Graphiques ─── -->
-    <div id="tab-charts" class="tab-panel" role="tabpanel" aria-labelledby="tbtn-charts" hidden>
+    <div id="tab-kpi" class="tab-panel active" role="tabpanel" aria-labelledby="tbtn-kpi" tabindex="0">
+      <div class="kpi-grid" id="kpi-grid"></div>
+      <div class="summary-row">
+        <div class="gauge-section">
+          <h3>Risque de perte
+            <button type="button" class="info" data-tip="Probabilité que la valeur nette finale soit inférieure au total de vos versements.">?</button>
+          </h3>
+          <div class="gauge-wrap"><canvas id="gauge-chart" width="280" height="150" role="img" aria-label="Jauge du risque de perte"></canvas></div>
+          <div class="gauge-label" id="gauge-label">—</div>
+        </div>
+        <div class="explainer" id="risk-explainer"></div>
+      </div>
+      <div class="warnings" id="result-warnings"></div>
+    </div>
+
+    <div id="tab-charts" class="tab-panel" role="tabpanel" aria-labelledby="tbtn-charts" tabindex="0" hidden>
+      <div class="chart-block">
+        <div class="chart-head">
+          <h3>Trajectoires possibles
+            <button type="button" class="info" data-tip="Chaque bande contient une part des scénarios : 80 % entre les courbes 10e et 90e percentiles, 50 % entre 25e et 75e. La ligne pointillée grise est le total versé.">?</button>
+          </h3>
+          <label class="check"><input type="checkbox" id="fan-real" /> en euros d'aujourd'hui</label>
+        </div>
+        <div class="chart-container"><canvas id="fan-chart" role="img" aria-label="Évolution des percentiles de valeur du portefeuille"></canvas></div>
+      </div>
       <div class="charts-row">
         <div class="chart-block">
-          <h3>
-            Trajectoires possibles
-            <span class="info-icon info-icon--sm" data-tooltip="Enveloppe de percentiles (10e, 25e, médiane, 75e, 90e) des 10 000 trajectoires simulées par Monte Carlo / MBG.">ⓘ</span>
+          <h3>Distribution de la valeur nette finale
+            <button type="button" class="info" data-tip="Nombre de scénarios par tranche de valeur nette à l'horizon. En rouge : scénarios où vous récupérez moins que vos versements.">?</button>
           </h3>
-          <div class="chart-container">
-            <canvas id="fan-chart"></canvas>
-          </div>
+          <div class="chart-container"><canvas id="dist-chart" role="img" aria-label="Histogramme des valeurs nettes finales"></canvas></div>
         </div>
         <div class="chart-block">
-          <h3>
-            Distribution des valeurs finales
-            <span class="info-icon info-icon--sm" data-tooltip="Histogramme de la valeur du portefeuille à l'échéance. En rouge : scénarios inférieurs au capital initial.">ⓘ</span>
-          </h3>
-          <div class="chart-container">
-            <canvas id="dist-chart"></canvas>
+          <div class="chart-head">
+            <h3>Répartition</h3>
+            <select id="donut-mode" aria-label="Répartition par">
+              <option value="product">par support</option>
+              <option value="vehicle">par enveloppe</option>
+            </select>
           </div>
-        </div>
-      </div>
-      <div class="chart-block chart-block--center">
-        <h3>Répartition du portefeuille</h3>
-        <div class="chart-container chart-container--small">
-          <canvas id="donut-chart"></canvas>
+          <div class="chart-container"><canvas id="donut-chart" role="img" aria-label="Répartition du portefeuille"></canvas></div>
         </div>
       </div>
     </div>
 
-    <!-- ─── Onglet 3 : Détail ─── -->
-    <div id="tab-detail" class="tab-panel" role="tabpanel" aria-labelledby="tbtn-detail" hidden>
-      <p class="hint">
-        Valeurs médianes indicatives par support — issues de la même simulation jointe ;
-        leur somme ne correspond pas exactement à la médiane globale du portefeuille (propriété statistique normale).
-      </p>
+    <div id="tab-fiscal" class="tab-panel" role="tabpanel" aria-labelledby="tbtn-fiscal" tabindex="0" hidden>
+      <div class="kpi-grid kpi-grid--compact" id="fiscal-kpis"></div>
+      <h3>Par enveloppe (valeurs médianes)</h3>
+      <p class="hint">Valeurs médianes de chaque colonne, issues de la même simulation : leur somme ne correspond pas exactement aux totaux du portefeuille (la médiane d'une somme n'est pas la somme des médianes).</p>
       <div class="table-wrap">
-        <table class="detail-table" id="detail-table" aria-label="Détail par support d'investissement">
-          <thead>
-            <tr>
-              <th scope="col">Support</th>
-              <th scope="col">Véhicule</th>
-              <th scope="col">Alloc.</th>
-              <th scope="col">
-                Rdt attendu
-                <span class="info-icon info-icon--sm" data-tooltip="Rendement annuel moyen (μ) paramétré dans le modèle. Ne constitue pas une promesse de performance.">ⓘ</span>
-              </th>
-              <th scope="col">
-                Volatilité
-                <span class="info-icon info-icon--sm" data-tooltip="Écart-type annualisé (σ) des rendements. Mesure la dispersion autour du rendement moyen.">ⓘ</span>
-              </th>
-              <th scope="col">Valeur médiane</th>
-            </tr>
-          </thead>
+        <table class="data-table" id="fiscal-table">
+          <thead><tr><th scope="col">Enveloppe</th><th scope="col">Versé</th><th scope="col">Valeur finale</th><th scope="col">Impôt sur le revenu</th><th scope="col">Prélèvements sociaux</th><th scope="col">Net</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
-
-      <div class="table-wrap table-wrap--spaced">
-        <p class="hint">
-          Répartition fiscale par véhicule — valeurs médianes indicatives issues de la même simulation ;
-          leur somme ne correspond pas exactement à la médiane globale du portefeuille (propriété statistique normale).
-        </p>
-        <table class="detail-table" id="fiscal-table" aria-label="Répartition fiscale par véhicule d'investissement">
-          <thead>
-            <tr>
-              <th scope="col">Véhicule</th>
-              <th scope="col">Capital investi</th>
-              <th scope="col">Valeur finale méd.</th>
-              <th scope="col">dont IR</th>
-              <th scope="col">dont PS</th>
-              <th scope="col">Total impôts</th>
-              <th scope="col">Net récupéré</th>
-            </tr>
-          </thead>
+      <h3>Et si tout était dans une seule enveloppe ?
+        <button type="button" class="info" data-tip="Même valeur brute médiane et mêmes versements, fiscalité de sortie de chaque enveloppe. Ne tient pas compte des plafonds ni des supports éligibles.">?</button>
+      </h3>
+      <div class="table-wrap">
+        <table class="data-table" id="envelope-table">
+          <thead><tr><th scope="col">Enveloppe</th><th scope="col">Impôts à la sortie</th><th scope="col">Net</th><th scope="col">Règle appliquée</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
     </div>
 
-    <!-- ─── Boutons ─── -->
-    <div class="btn-row">
-      <button class="btn btn-secondary" id="btn-step3-back">← Modifier</button>
-      <button class="btn btn-outline"   id="btn-step3-restart">Recommencer</button>
-      <button class="btn btn-pdf"       id="btn-pdf">⬇ Exporter PDF</button>
+    <div id="tab-detail" class="tab-panel" role="tabpanel" aria-labelledby="tbtn-detail" tabindex="0" hidden>
+      <p class="hint">Valeur médiane par support, issue de la même simulation jointe et corrélée. Rendements annuels : bruts = avant frais ; nets = après frais du support et de l'enveloppe.</p>
+      <div class="table-wrap">
+        <table class="data-table" id="detail-table">
+          <thead><tr><th scope="col">Support</th><th scope="col">Alloc.</th><th scope="col">Rdt brut</th><th scope="col">Frais</th><th scope="col">Rdt net</th><th scope="col">Volatilité</th><th scope="col">Source</th><th scope="col">Versé</th><th scope="col">Valeur médiane</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="tab-method" class="tab-panel" role="tabpanel" aria-labelledby="tbtn-method" tabindex="0" hidden>
+      <div id="method-content" class="prose"></div>
+    </div>
+
+    <div class="btn-row btn-row--wrap">
+      <button type="button" class="btn btn-secondary" id="btn-step3-back">← Allocation</button>
+      <button type="button" class="btn btn-outline" id="btn-rerun" title="Relancer avec une nouvelle graine aléatoire">🎲 Relancer</button>
+      <button type="button" class="btn btn-outline" id="btn-share">🔗 Partager</button>
+      <button type="button" class="btn btn-outline" id="btn-csv">⬇ CSV</button>
+      <button type="button" class="btn btn-pdf" id="btn-pdf">⬇ Rapport PDF</button>
     </div>
   </section>
 </main>
 
+<dialog id="guide-dialog" class="guide" aria-labelledby="guide-title">
+  <div class="guide-close-row"><button type="button" class="btn-icon" id="guide-close" aria-label="Fermer le guide">✕</button></div>
+  <h2 id="guide-title">📘 Guide : comprendre la simulation</h2>
+  <div class="prose" id="guide-content">
+    <h3>1. Le principe : simuler des milliers de futurs</h3>
+    <p>Personne ne connaît les rendements futurs. Plutôt qu'une projection unique (« 5 % par an »), la méthode de <strong>Monte Carlo</strong> tire au hasard des milliers de trajectoires de marché plausibles, mois par mois, à partir d'un rendement moyen (μ) et d'une volatilité (σ) par support. On obtient une <strong>distribution</strong> de résultats possibles, et donc une mesure du risque.</p>
+
+    <h3>2. Lire les résultats</h3>
+    <ul>
+      <li><strong>Médiane</strong> : la moitié des scénarios fait mieux, l'autre moitié moins bien. C'est le résultat « typique », plus prudent que la moyenne, tirée vers le haut par quelques scénarios exceptionnels.</li>
+      <li><strong>Scénarios défavorable / favorable</strong> (10e et 90e percentiles) : 8 scénarios sur 10 se situent entre les deux.</li>
+      <li><strong>Probabilité de perte</strong> : part des scénarios où vous récupérez, net d'impôts, moins que ce que vous avez versé.</li>
+      <li><strong>Euros d'aujourd'hui</strong> : valeur corrigée de l'inflation, c'est-à-dire en pouvoir d'achat actuel.</li>
+      <li><strong>Rendement annualisé (TRI)</strong> : rendement moyen par an qui tient compte de la date de chaque versement.</li>
+      <li><strong>Baisse en cours de route</strong> : la plus forte chute temporaire depuis un sommet. Elle mesure ce que vous devrez supporter sans vendre.</li>
+    </ul>
+
+    <h3>3. Volatilité, corrélation, diversification</h3>
+    <p>La <strong>volatilité</strong> mesure l'amplitude des variations : avec σ = 15 %, une année sur trois environ s'écarte de plus de 15 points de la moyenne. La <strong>corrélation</strong> indique si deux supports montent et baissent ensemble : des ETF actions mondiales et américaines sont corrélés à 0,95, actions et obligations d'État beaucoup moins. Diversifier entre actifs peu corrélés réduit le risque global sans réduire autant le rendement. Enfin, la volatilité <em>érode</em> la croissance composée : le rendement médian vaut environ μ − σ²/2.</p>
+
+    <h3>4. Les enveloppes fiscales en 2026</h3>
+    <p>À performance égale, l'enveloppe change fortement le résultat net. Depuis la LFSS 2026, les prélèvements sociaux sont de 18,6 % sur la plupart des revenus du capital, mais restent à 17,2 % pour l'assurance-vie et les revenus fonciers.</p>
+    <table><tbody id="guide-vehicles"></tbody></table>
+    <p>L'onglet <em>Fiscalité &amp; frais</em> des résultats compare ce que donnerait votre portefeuille dans chaque enveloppe.</p>
+
+    <h3>5. Les frais comptent énormément</h3>
+    <p>Des frais de 1 %/an paraissent faibles, mais ils se capitalisent : sur 25 ans, ils amputent le capital final d'environ 20 %. Comparez le TER des ETF (souvent 0,1 à 0,4 %) aux fonds traditionnels (1,5 à 2,5 %) et aux frais de gestion des contrats d'assurance-vie (0,5 à 1 % sur les unités de compte).</p>
+
+    <h3>6. D'où viennent les hypothèses ?</h3>
+    <ul>
+      <li><strong>Prospectif</strong> (par défaut) : estimations long terme prudentes par classe d'actifs, cohérentes avec les projections publiées par les grands gérants.</li>
+      <li><strong>Historique</strong> : rendement, volatilité et corrélations mesurés sur 10 ans de cours réels (Yahoo Finance). Attention : la décennie passée a été exceptionnelle pour les actions américaines.</li>
+      <li><strong>Mixte</strong> : moyenne des deux. Chaque valeur reste modifiable support par support.</li>
+    </ul>
+
+    <h3>7. Limites</h3>
+    <p>Un modèle reste une simplification : volatilités et corrélations constantes, rachat total à l'horizon, pas de retraits intermédiaires. Ce simulateur est un outil pédagogique et ne remplace pas un conseil personnalisé par un professionnel agréé (CIF, CGP).</p>
+  </div>
+</dialog>
+
 <footer>
-  <p>Simulation à titre indicatif uniquement — Pas un conseil en investissement.</p>
-  <p>Modèle MBG / Monte Carlo (10 000 scénarios) — SimuPortefeuille © 2026</p>
+  <p>Outil pédagogique — ne constitue pas un conseil en investissement. Les performances passées ne préjugent pas des performances futures.</p>
+  <p>SimuPortefeuille <span id="footer-version"></span> · fiscalité millésime <span id="footer-fiscal"></span> · <a href="https://github.com/arnauddelavoet-debug/essai1" rel="noopener">code source</a></p>
 </footer>
-
-<script type="module" src="src/main.js"></script>
-
-<!-- Vercel Web Analytics -->
-<script>
-  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-</script>
-<script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>

@@ -1,3 +1,4 @@
-import { initUI } from './ui.js';
+import { initApp } from './ui/app.js';
 
-document.addEventListener('DOMContentLoaded', initUI);
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initApp);
+else initApp();
