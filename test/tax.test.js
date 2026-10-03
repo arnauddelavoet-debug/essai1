@@ -1,63 +1,147 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { calcTax } from '../src/tax.js';
+import { vehicleTax, computeTaxes, singleVehicleTax, perDeductionSaving, landIncomeTaxRate } from '../src/engine/tax.js';
+import { abattementPlusValueImmo } from '../src/config/fiscal.js';
 
-test('un gain nul ou négatif ne génère aucun impôt, quel que soit le véhicule', () => {
-  for (const vehicle of ['Livret', 'PEA', 'AV', 'CTO']) {
-    assert.deepEqual(calcTax(0, vehicle, 10, 30), { irTax: 0, psTax: 0, total: 0 });
-    assert.deepEqual(calcTax(-500, vehicle, 10, 30), { irTax: 0, psTax: 0, total: 0 });
+const ctx = (over = {}) => ({ tmi: 30, tmiRetraite: 30, couple: false, peaAge: 10, avAge: 10, holdingYears: 10, bareme: 'pfu', ...over });
+const close = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≠ ${b}`);
+
+test('gain nul ou négatif : aucun impôt, quelle que soit l\'enveloppe (hors PER)', () => {
+  for (const v of ['LIVRET', 'PEA', 'AV', 'CTO', 'CRYPTO', 'SCPI']) {
+    const t = singleVehicleTax(v, { value: 9_000, invested: 10_000 }, ctx());
+    assert.equal(t.total, 0, v);
   }
 });
 
-test('Livret A/LDDS/LEP sont toujours exonérés, même avec un gain positif', () => {
-  assert.deepEqual(calcTax(1000, 'Livret', 20, 45), { irTax: 0, psTax: 0, total: 0 });
+test('livrets réglementés : toujours exonérés', () => {
+  assert.equal(singleVehicleTax('LIVRET', { value: 12_000, invested: 10_000 }, ctx({ tmi: 45 })).total, 0);
 });
 
-test('PEA >= 5 ans : exonération IR, PS 17,2 % uniquement', () => {
-  const r = calcTax(1000, 'PEA', 5, 30);
-  assert.equal(r.irTax, 0);
-  assert.ok(Math.abs(r.psTax - 172) < 1e-9);
-  assert.ok(Math.abs(r.total - 172) < 1e-9);
+test('PEA ≥ 5 ans : exonération d\'IR, prélèvements sociaux 18,6 % (LFSS 2026)', () => {
+  const t = singleVehicleTax('PEA', { value: 11_000, invested: 10_000 }, ctx({ peaAge: 5 }));
+  close(t.ir, 0);
+  close(t.ps, 186);
 });
 
-test('PEA < 5 ans : flat tax 30 % (IR 12,8 % + PS 17,2 %)', () => {
-  const r = calcTax(1000, 'PEA', 4, 30);
-  assert.ok(Math.abs(r.irTax - 128) < 1e-9);
-  assert.ok(Math.abs(r.psTax - 172) < 1e-9);
-  assert.ok(Math.abs(r.total - 300) < 1e-9);
+test('PEA < 5 ans : PFU 31,4 % (12,8 % + 18,6 %)', () => {
+  const t = singleVehicleTax('PEA', { value: 11_000, invested: 10_000 }, ctx({ peaAge: 4 }));
+  close(t.ir, 128);
+  close(t.total, 314);
 });
 
-test('AV >= 8 ans avec gain sous l\'abattement de 4600 € : aucun impôt', () => {
-  const r = calcTax(4000, 'AV', 8, 30);
-  assert.deepEqual(r, { irTax: 0, psTax: 0, total: 0 });
+test('CTO et crypto : PFU 31,4 %', () => {
+  close(singleVehicleTax('CTO', { value: 2_000, invested: 1_000 }, ctx()).total, 314);
+  close(singleVehicleTax('CRYPTO', { value: 2_000, invested: 1_000 }, ctx()).total, 314);
 });
 
-test('AV >= 8 ans avec gain au-dessus de l\'abattement : taux réduit 7,5 % + PS sur la part imposable', () => {
-  const r = calcTax(10000, 'AV', 8, 30);
-  // taxable = 10000 - 4600 = 5400 ; irRate = min(0.075, 0.30) = 0.075
-  assert.ok(Math.abs(r.irTax - 5400 * 0.075) < 1e-9);
-  assert.ok(Math.abs(r.psTax - 5400 * 0.172) < 1e-9);
-  assert.ok(Math.abs(r.total - 5400 * 0.247) < 1e-6);
+test('AV < 8 ans : 12,8 % + PS 17,2 % (l\'AV est exclue de la hausse de CSG)', () => {
+  const t = singleVehicleTax('AV', { value: 20_000, invested: 10_000 }, ctx({ avAge: 7 }));
+  close(t.ir, 1_280);
+  close(t.ps, 1_720);
 });
 
-test('AV >= 8 ans : le taux IR réduit est plafonné par une TMI plus basse', () => {
-  const r = calcTax(10000, 'AV', 8, 0); // TMI 0 % < 7,5 %
-  assert.ok(Math.abs(r.irTax - 5400 * 0) < 1e-9);
+test('AV ≥ 8 ans : abattement 4 600 € sur l\'IR uniquement, PS sur la totalité du gain', () => {
+  const t = singleVehicleTax('AV', { value: 20_000, invested: 10_000 }, ctx({ avAge: 8 }));
+  close(t.ir, (10_000 - 4_600) * 0.075);
+  close(t.ps, 10_000 * 0.172);
 });
 
-test('AV < 8 ans : flat tax 30 %, pas d\'abattement', () => {
-  const r = calcTax(10000, 'AV', 7, 30);
-  assert.ok(Math.abs(r.total - 3000) < 1e-9);
+test('AV ≥ 8 ans en couple : abattement de 9 200 €', () => {
+  const t = singleVehicleTax('AV', { value: 20_000, invested: 10_000 }, ctx({ avAge: 8, couple: true }));
+  close(t.ir, 800 * 0.075);
 });
 
-test('CTO utilise le PFU 30 % quand la TMI est élevée (plus avantageux)', () => {
-  const r = calcTax(1000, 'CTO', 10, 45); // tmiTotal = (0.45+0.172)=62.2% > 30%
-  assert.ok(Math.abs(r.total - 300) < 1e-9);
-  assert.ok(Math.abs(r.irTax - 128) < 1e-9);
+test('AV ≥ 8 ans : gain sous l\'abattement → seuls les PS sont dus', () => {
+  const t = singleVehicleTax('AV', { value: 14_000, invested: 10_000 }, ctx({ avAge: 12 }));
+  close(t.ir, 0);
+  close(t.ps, 4_000 * 0.172);
 });
 
-test('CTO bascule sur le barème TMI + PS quand c\'est plus avantageux que le PFU', () => {
-  const r = calcTax(1000, 'CTO', 10, 0); // tmiTotal = (0+0.172)=17.2% < 30%
-  assert.ok(Math.abs(r.total - 172) < 1e-9);
-  assert.ok(Math.abs(r.irTax - 0) < 1e-9);
+test('AV ≥ 8 ans au-delà de 150 000 € de primes : 12,8 % sur la fraction excédentaire', () => {
+  const t = singleVehicleTax('AV', { value: 400_000, invested: 300_000 }, ctx({ avAge: 10 }));
+  const taxable = 100_000 - 4_600;
+  close(t.ir, taxable * (0.5 * 0.075 + 0.5 * 0.128));
+});
+
+test('PER sortie en capital : versements au barème (TMI retraite), gains au PFU 31,4 %', () => {
+  const t = singleVehicleTax('PER', { value: 15_000, invested: 10_000 }, ctx({ tmiRetraite: 11 }));
+  close(t.ir, 10_000 * 0.11 + 5_000 * 0.128);
+  close(t.ps, 5_000 * 0.186);
+});
+
+test('PER en perte : seule la valeur restante est imposée au barème', () => {
+  const t = singleVehicleTax('PER', { value: 8_000, invested: 10_000 }, ctx({ tmiRetraite: 30 }));
+  close(t.ir, 8_000 * 0.30);
+  close(t.ps, 0);
+});
+
+test('SCPI en direct : plus-value immobilière 19 % + 17,2 % avec abattements pour durée', () => {
+  const t = singleVehicleTax('SCPI', { value: 12_000, invested: 10_000 }, ctx({ holdingYears: 10 }));
+  const ab = abattementPlusValueImmo(10);
+  close(t.ir, 2_000 * (1 - ab.ir) * 0.19);
+  close(t.ps, 2_000 * (1 - ab.ps) * 0.172);
+});
+
+test('abattements pour durée de détention : barème légal (22 ans IR, 30 ans PS)', () => {
+  assert.deepEqual(abattementPlusValueImmo(5), { ir: 0, ps: 0 });
+  close(abattementPlusValueImmo(6).ir, 0.06);
+  close(abattementPlusValueImmo(6).ps, 0.0165);
+  close(abattementPlusValueImmo(21).ir, 0.96);
+  close(abattementPlusValueImmo(22).ir, 1);
+  close(abattementPlusValueImmo(22).ps, 0.28);
+  close(abattementPlusValueImmo(29).ps, 0.91);
+  close(abattementPlusValueImmo(30).ps, 1);
+  close(abattementPlusValueImmo(40).ps, 1);
+});
+
+test('option barème « auto » : retenue seulement si globalement plus favorable', () => {
+  const buckets = { CTO: { value: 2_000, invested: 1_000 } };
+  const lowTmi = computeTaxes(buckets, ctx({ tmi: 0, bareme: 'auto' }));
+  assert.equal(lowTmi.regime, 'bareme');
+  close(lowTmi.ir, 0);
+  const highTmi = computeTaxes(buckets, ctx({ tmi: 41, bareme: 'auto' }));
+  assert.equal(highTmi.regime, 'pfu');
+  close(highTmi.ir, 128);
+});
+
+test('option barème : décision globale, pas enveloppe par enveloppe', () => {
+  // TMI 11 % : le barème (11 %) bat le PFU (12,8 %) sur le CTO, mais pas sur
+  // l'AV ≥ 8 ans (7,5 %). L'option étant globale, elle n'est retenue que si
+  // l'IR total est plus faible ; ici l'AV pèse davantage → PFU partout.
+  const buckets = { CTO: { value: 2_000, invested: 1_000 }, AV: { value: 30_000, invested: 10_000 } };
+  const r = computeTaxes(buckets, ctx({ tmi: 11, avAge: 10, bareme: 'auto' }));
+  const pfuIr = 1_000 * 0.128 + (20_000 - 4_600) * 0.075;
+  const barIr = 1_000 * 0.11 + (20_000 - 4_600) * 0.11;
+  assert.ok(pfuIr < barIr);
+  assert.equal(r.regime, 'pfu');
+  close(r.ir, pfuIr);
+});
+
+test('régime forcé : « bareme » applique la TMI même si défavorable', () => {
+  const r = computeTaxes({ CTO: { value: 2_000, invested: 1_000 } }, ctx({ tmi: 45, bareme: 'bareme' }));
+  close(r.ir, 450);
+});
+
+test('computeTaxes additionne les enveloppes sans compenser les pertes entre elles', () => {
+  const r = computeTaxes({
+    CTO: { value: 2_000, invested: 1_000 },
+    CRYPTO: { value: 500, invested: 1_000 },
+  }, ctx());
+  close(r.total, 314);
+  close(r.byVehicle.CRYPTO.total, 0);
+});
+
+test('vehicleTax expose les deux régimes d\'IR', () => {
+  const t = vehicleTax('CTO', { value: 2_000, invested: 1_000 }, ctx({ tmi: 41 }));
+  close(t.irPfu, 128);
+  close(t.irBareme, 410);
+});
+
+test('économie d\'impôt PER : versements × TMI dans la limite du plafond annuel', () => {
+  close(perDeductionSaving([5_000, 5_000], 30), 3_000);
+  close(perDeductionSaving([50_000], 41, 37_680), 37_680 * 0.41);
+});
+
+test('taux annuel des revenus fonciers : TMI + 17,2 %', () => {
+  close(landIncomeTaxRate(30), 0.472);
 });

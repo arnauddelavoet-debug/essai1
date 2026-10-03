@@ -1,8 +1,10 @@
 name: Déployer sur GitHub Pages
 
+# Miroir statique (sans API live : l'application utilise alors
+# l'instantané de marché data/market-snapshot.json).
 on:
   push:
-    branches: ["main"]
+    branches: ["claude/financial-portfolio-app-eePhX"]
   workflow_dispatch:
 
 permissions:
@@ -24,13 +26,18 @@ jobs:
       - name: Checkout du code
         uses: actions/checkout@v4
 
+      - name: Préparer le site (sans tests, docs ni scripts)
+        run: |
+          mkdir _site
+          cp -r index.html style.css favicon.svg src data _site/
+
       - name: Configuration GitHub Pages
         uses: actions/configure-pages@v5
 
       - name: Upload du site statique
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: '_site'
 
       - name: Déploiement sur GitHub Pages
         id: deployment

@@ -1,0 +1,35 @@
+name: Rafraîchir l'instantané de marché
+
+# Chaque lundi, régénère data/market-snapshot.json (repli hors ligne et
+# GitHub Pages) et le committe s'il a changé.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Générer l'instantané
+        run: npm run market:update
+      - name: Valider avec les tests
+        run: npm test
+      - name: Committer si modifié
+        run: |
+          if git diff --quiet data/market-snapshot.json; then
+            echo "Aucun changement."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add data/market-snapshot.json
+            git commit -m "chore(data): rafraîchir l'instantané de marché"
+            git push
+          fi

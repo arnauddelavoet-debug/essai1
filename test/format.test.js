@@ -1,36 +1,39 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fmt, fmtPct, fmtPdf, fmtPctPdf } from '../src/format.js';
+import { fmt, fmtPct, fmtPctSigned, fmtCompact, fmtPdf, fmtPctPdf, fmtDate } from '../src/ui/format.js';
 
-test('fmt formate un entier positif avec le signe euro et espace insécable', () => {
-  assert.equal(fmt(10000), '10 000 €');
-});
+const norm = s => s.replace(/[  ]/g, ' ');
 
-test('fmt retourne un tiret cadratin pour les valeurs non finies', () => {
+test('fmt : euros arrondis, séparateurs français', () => {
+  assert.equal(norm(fmt(10000)), '10 000 €');
+  assert.equal(norm(fmt(-1234.6)), '-1 235 €');
   assert.equal(fmt(NaN), '—');
-  assert.equal(fmt(Infinity), '—');
 });
 
-test('fmtPct formate un ratio en pourcentage avec une décimale', () => {
-  assert.equal(fmtPct(0.153), '15.3 %');
+test('fmtPct et fmtPctSigned : virgule décimale', () => {
+  assert.equal(norm(fmtPct(0.153)), '15,3 %');
+  assert.equal(norm(fmtPct(0.153, 0)), '15 %');
+  assert.equal(norm(fmtPctSigned(0.042)), '+4,2 %');
+  assert.equal(norm(fmtPctSigned(-0.01)), '−1,0 %');
+  assert.equal(fmtPct(Infinity), '—');
 });
 
-test('fmtPct retourne un tiret cadratin pour les valeurs non finies', () => {
-  assert.equal(fmtPct(NaN), '—');
+test('fmtCompact : axes de graphiques', () => {
+  assert.equal(norm(fmtCompact(850)), '850 €');
+  assert.equal(norm(fmtCompact(12_400)), '12 k€');
+  assert.equal(norm(fmtCompact(1_250_000)), '1,3 M€');
 });
 
-test('fmtPdf formate avec séparateur espace ASCII et suffixe EUR (compatible jsPDF/Helvetica)', () => {
+test('formats PDF : ASCII uniquement', () => {
   assert.equal(fmtPdf(1234567), '1 234 567 EUR');
-});
-
-test('fmtPdf gère les valeurs négatives', () => {
   assert.equal(fmtPdf(-500), '-500 EUR');
-});
-
-test('fmtPdf retourne un tiret simple pour les valeurs non finies', () => {
   assert.equal(fmtPdf(NaN), '-');
+  assert.equal(fmtPctPdf(0.128), '12,8 %');
+  assert.ok(/^[\x20-\x7E]+$/.test(fmtPdf(9876543.21) + fmtPctPdf(0.5)));
 });
 
-test('fmtPctPdf formate un ratio en pourcentage ASCII', () => {
-  assert.equal(fmtPctPdf(0.128), '12.8%');
+test('fmtDate : mois et dates ISO', () => {
+  assert.equal(fmtDate('2026-08'), 'août 2026');
+  assert.match(fmtDate('2026-09-30T10:00:00Z'), /30 septembre 2026/);
+  assert.equal(fmtDate(null), '—');
 });
